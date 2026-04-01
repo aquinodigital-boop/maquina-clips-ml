@@ -296,10 +296,9 @@ function renderClipList() {
                     <button class="trim-play-btn" onclick="playTrimmed('${clip.clip_id}')">▶ Preview</button>
                     <button class="trim-reset-btn" onclick="resetTrim('${clip.clip_id}')">Resetar</button>
                 </div>
-                ${resMismatch ? `
                 <div class="crop-controls">
                     <div class="crop-group">
-                        <label>Ajuste de proporção</label>
+                        <label>Enquadramento</label>
                         <select id="fitmode-${clip.clip_id}" onchange="onFitModeChange('${clip.clip_id}', this.value)">
                             <option value="default" ${clip.fit_mode === 'default' ? 'selected' : ''}>Padrão do perfil</option>
                             <option value="letterbox" ${clip.fit_mode === 'letterbox' ? 'selected' : ''}>Letterbox (barras pretas)</option>
@@ -308,7 +307,7 @@ function renderClipList() {
                         </select>
                     </div>
                     <div class="crop-group" id="anchor-group-${clip.clip_id}" style="display: ${clip.fit_mode === 'crop' ? '' : 'none'}">
-                        <label>Ancoragem do recorte</label>
+                        <label>Ponto de recorte</label>
                         <div class="crop-anchor-grid" id="anchor-grid-${clip.clip_id}">
                             ${['top-left','top','top-right','left','center','right','bottom-left','bottom','bottom-right'].map(pos =>
                                 `<button class="anchor-btn ${clip.crop_anchor === pos ? 'active' : ''}"
@@ -319,8 +318,8 @@ function renderClipList() {
                             ).join('')}
                         </div>
                     </div>
-                </div>
-                ` : ''}` : ''}
+                    ${resMismatch ? `<div class="crop-warning">⚠ ${clip.width}x${clip.height} → ${targetAR}</div>` : ''}
+                </div>` : ''}
         `;
         clipList.appendChild(el);
 

@@ -480,6 +480,13 @@ body {
     background: white;
 }
 
+.crop-warning {
+    font-size: 0.8rem;
+    color: var(--warning);
+    align-self: center;
+    padding-left: 0.5rem;
+}
+
 /* === Preview Timeline === */
 .preview-section {
     margin-bottom: 1.5rem;
