@@ -25,7 +25,7 @@ body {
 
 /* === App Layout === */
 .app {
-    max-width: 900px;
+    max-width: 960px;
     margin: 0 auto;
     padding: 2rem 1.5rem 4rem;
 }
@@ -122,20 +122,21 @@ body {
 
 /* === Clip Item === */
 .clip-item {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 0.8rem 1rem;
     margin-bottom: 0.5rem;
-    cursor: grab;
     transition: all 0.15s;
     user-select: none;
+    overflow: hidden;
 }
 
 .clip-item:hover { background: var(--bg-hover); }
+
+.clip-item.expanded {
+    border-color: var(--accent);
+    background: var(--bg-card);
+}
 
 .clip-item.sortable-ghost {
     opacity: 0.4;
@@ -145,6 +146,14 @@ body {
 .clip-item.sortable-drag {
     background: var(--bg-card);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.clip-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.8rem 1rem;
+    cursor: grab;
 }
 
 .clip-handle {
@@ -171,6 +180,7 @@ body {
 .clip-info {
     flex: 1;
     min-width: 0;
+    cursor: pointer;
 }
 
 .clip-name {
@@ -185,6 +195,11 @@ body {
     color: var(--text-dim);
     font-size: 0.8rem;
     margin-top: 0.15rem;
+}
+
+.clip-meta .trim-badge {
+    color: var(--accent);
+    font-weight: 600;
 }
 
 .clip-actions {
@@ -214,9 +229,167 @@ body {
     border-color: var(--text-dim);
 }
 
+.clip-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+}
+
 .clip-btn.delete:hover {
     border-color: var(--danger);
     color: var(--danger);
+}
+
+/* === Trim Editor (expandable) === */
+.trim-editor {
+    display: none;
+    padding: 1rem 1rem 1.2rem;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+}
+
+.clip-item.expanded .trim-editor {
+    display: block;
+}
+
+.trim-preview {
+    width: 100%;
+    border-radius: 8px;
+    background: #000;
+    margin-bottom: 1rem;
+    max-height: 300px;
+}
+
+.trim-range-container {
+    position: relative;
+    margin-bottom: 1rem;
+}
+
+.trim-range-track {
+    position: relative;
+    height: 40px;
+    background: var(--bg-card);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.trim-range-selected {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    background: rgba(255, 107, 53, 0.25);
+    border-left: 3px solid var(--accent);
+    border-right: 3px solid var(--accent);
+    pointer-events: none;
+}
+
+.trim-range-playhead {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background: white;
+    pointer-events: none;
+    transition: left 0.1s linear;
+}
+
+.trim-range-handle {
+    position: absolute;
+    top: 0;
+    width: 14px;
+    height: 100%;
+    cursor: ew-resize;
+    z-index: 2;
+}
+
+.trim-range-handle::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 4px;
+    height: 20px;
+    background: var(--accent);
+    border-radius: 2px;
+}
+
+.trim-range-handle.start { left: 0; }
+.trim-range-handle.end { right: 0; }
+
+.trim-controls {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.trim-time-group {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.trim-time-group label {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+
+.trim-time-input {
+    width: 80px;
+    background: var(--bg-card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.85rem;
+    font-family: monospace;
+    text-align: center;
+    outline: none;
+}
+
+.trim-time-input:focus {
+    border-color: var(--accent);
+}
+
+.trim-duration-label {
+    flex: 1;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.trim-play-btn {
+    background: var(--accent);
+    border: none;
+    color: white;
+    padding: 0.4rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: opacity 0.15s;
+}
+
+.trim-play-btn:hover { opacity: 0.85; }
+
+.trim-reset-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.15s;
+}
+
+.trim-reset-btn:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
 }
 
 /* === Settings === */
@@ -375,48 +548,8 @@ body {
     border-color: var(--text-dim);
 }
 
-/* === Modal === */
-.modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.85);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    padding: 2rem;
-}
-
-.modal-content {
-    position: relative;
-    max-width: 800px;
-    width: 100%;
-}
-
-.modal-close {
-    position: absolute;
-    top: -40px;
-    right: 0;
-    background: none;
-    border: none;
-    color: white;
-    font-size: 2rem;
-    cursor: pointer;
-    opacity: 0.7;
-    transition: opacity 0.15s;
-}
-
-.modal-close:hover { opacity: 1; }
-
-.modal-content video {
-    width: 100%;
-    border-radius: var(--radius);
-}
-
 /* === Upload spinner on clip item === */
-.clip-item.uploading {
-    opacity: 0.6;
-}
+.clip-item.uploading { opacity: 0.6; }
 
 .upload-spinner {
     width: 20px;
@@ -427,9 +560,7 @@ body {
     animation: spin 0.6s linear infinite;
 }
 
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* === Responsive === */
 @media (max-width: 600px) {
@@ -437,5 +568,5 @@ body {
     .settings-grid { grid-template-columns: 1fr; }
     .stat-value { font-size: 1.2rem; }
     .header h1 { font-size: 1.6rem; }
-    .clip-meta { display: none; }
+    .trim-controls { flex-wrap: wrap; }
 }

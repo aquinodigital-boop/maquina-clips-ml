@@ -13,7 +13,7 @@
         <!-- Header -->
         <header class="header">
             <h1>🎬 Montador Expresso</h1>
-            <p class="subtitle">Meli Clips — Arraste os cortes e monte seu vídeo longo</p>
+            <p class="subtitle">Meli Clips — Suba os vídeos, escolha os trechos e monte na ordem</p>
         </header>
 
         <!-- Stats Bar -->
@@ -24,14 +24,14 @@
             </div>
             <div class="stat">
                 <span class="stat-value" id="statDuration">00:00</span>
-                <span class="stat-label">Duração Total</span>
+                <span class="stat-label">Duração Final</span>
             </div>
             <div class="stat">
                 <span class="stat-value" id="statSize">0 MB</span>
-                <span class="stat-label">Tamanho</span>
+                <span class="stat-label">Tamanho Original</span>
             </div>
             <div class="stat">
-                <span class="stat-value" id="statResolution">—</span>
+                <span class="stat-value" id="statResolution">-</span>
                 <span class="stat-label">Resolução</span>
             </div>
         </div>
@@ -41,7 +41,7 @@
             <div class="drop-zone-content">
                 <div class="drop-icon">📁</div>
                 <p class="drop-text">Arraste vídeos aqui ou clique para selecionar</p>
-                <p class="drop-hint">MP4 e MOV • Até 500 MB por arquivo</p>
+                <p class="drop-hint">MP4 e MOV — Até 500 MB por arquivo</p>
                 <input type="file" id="fileInput" multiple accept=".mp4,.mov,video/mp4,video/quicktime" hidden>
             </div>
         </div>
@@ -50,7 +50,7 @@
         <div class="clips-section" id="clipsSection" style="display: none;">
             <div class="section-header">
                 <h2>Ordem dos Clipes</h2>
-                <span class="drag-hint">Arraste para reordenar</span>
+                <span class="drag-hint">Arraste para reordenar — clique no clipe para cortar</span>
             </div>
             <div class="clip-list" id="clipList"></div>
         </div>
@@ -103,14 +103,6 @@
                 ⬇️ Baixar Vídeo Pronto
             </a>
             <button class="new-btn" onclick="resetApp()">Montar outro vídeo</button>
-        </div>
-
-        <!-- Video Preview Modal -->
-        <div class="modal-overlay" id="previewModal" style="display: none;" onclick="closePreview(event)">
-            <div class="modal-content">
-                <button class="modal-close" onclick="closePreview()">&times;</button>
-                <video id="previewVideo" controls></video>
-            </div>
         </div>
     </div>
 

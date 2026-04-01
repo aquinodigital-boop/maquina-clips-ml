@@ -92,25 +92,40 @@ async def preview_clip(session_id: str, stored_name: str):
 
 @app.post("/api/sessions/{session_id}/render")
 async def render_video(session_id: str, payload: dict):
-    """Concatena os clipes na ordem especificada e gera o vídeo final."""
+    """Concatena os clipes na ordem especificada com trim e gera o vídeo final.
+
+    payload.clips: lista de { stored_name, trim_start, trim_end }
+    """
     session_dir = UPLOAD_DIR / session_id
     if not session_dir.exists():
         raise HTTPException(status_code=404, detail="Sessão não encontrada")
 
-    clip_order = payload.get("clip_order", [])
+    clip_entries = payload.get("clips", [])
     fps = payload.get("fps", 30)
     codec = payload.get("codec", "libx264")
 
-    if not clip_order:
+    if not clip_entries:
         raise HTTPException(status_code=400, detail="Nenhum clipe selecionado")
 
     clips = []
     try:
-        for stored_name in clip_order:
+        for entry in clip_entries:
+            stored_name = entry["stored_name"]
+            trim_start = entry.get("trim_start", 0)
+            trim_end = entry.get("trim_end")
+
             path = session_dir / stored_name
             if not path.exists():
                 raise HTTPException(status_code=404, detail=f"Clipe {stored_name} não encontrado")
-            clips.append(VideoFileClip(str(path)))
+
+            clip = VideoFileClip(str(path))
+
+            # Aplica trim se definido
+            if trim_start > 0 or (trim_end is not None and trim_end < clip.duration):
+                end = trim_end if trim_end is not None else clip.duration
+                clip = clip.subclipped(trim_start, end)
+
+            clips.append(clip)
 
         final = concatenate_videoclips(clips, method="compose")
         output_path = session_dir / "output_final.mp4"
@@ -124,13 +139,14 @@ async def render_video(session_id: str, payload: dict):
             logger=None,
         )
 
+        duration = final.duration
         final.close()
         for c in clips:
             c.close()
 
         return {
             "download_url": f"/api/sessions/{session_id}/download",
-            "duration": round(final.duration, 2),
+            "duration": round(duration, 2),
             "size_bytes": os.path.getsize(output_path),
         }
 
