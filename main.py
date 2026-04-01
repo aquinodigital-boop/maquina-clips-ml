@@ -417,37 +417,31 @@ def burn_subtitles_into_clip(final_clip, sub_data):
     # Cache de frames de legenda
     frame_cache = {}
 
-    def process_frame(get_frame, t):
-        base_frame = get_frame(t)
+    def make_frame(t):
+        base_frame = final_clip.get_frame(t)
 
         # Encontra o segmento ativo
-        active_seg = None
         for idx, seg in enumerate(segments):
             if seg["start"] <= t < seg["end"]:
-                active_seg = (idx, seg)
-                break
+                cache_key = (idx, seg["text"], seg["highlight"])
+                if cache_key not in frame_cache:
+                    frame_cache[cache_key] = create_subtitle_frame(
+                        seg["text"], seg["highlight"], video_size, style
+                    )
 
-        if active_seg is None:
-            return base_frame
+                sub_frame = frame_cache[cache_key]
+                alpha = sub_frame[:, :, 3:4].astype(np.float32) / 255.0
+                rgb = sub_frame[:, :, :3].astype(np.float32)
+                base = base_frame.astype(np.float32)
+                result = base * (1 - alpha) + rgb * alpha
+                return result.astype(np.uint8)
 
-        idx, seg = active_seg
-        cache_key = (idx, seg["text"], seg["highlight"])
-        if cache_key not in frame_cache:
-            frame_cache[cache_key] = create_subtitle_frame(
-                seg["text"], seg["highlight"], video_size, style
-            )
+        return base_frame
 
-        sub_frame = frame_cache[cache_key]
-
-        # Alpha compositing
-        alpha = sub_frame[:, :, 3:4].astype(np.float32) / 255.0
-        rgb = sub_frame[:, :, :3].astype(np.float32)
-        base = base_frame.astype(np.float32)
-
-        result = base * (1 - alpha) + rgb * alpha
-        return result.astype(np.uint8)
-
-    return final_clip.transform(process_frame)
+    new_clip = VideoClip(make_frame, duration=final_clip.duration)
+    if final_clip.audio is not None:
+        new_clip = new_clip.with_audio(final_clip.audio)
+    return new_clip
 
 
 # ==================== RENDER ====================
