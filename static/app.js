@@ -31,6 +31,7 @@ async function init() {
     renderProfileSelect();
     setupDropZone();
     setupSortable();
+    loadTelegramStatus();
 }
 
 // === Profiles ===
@@ -863,8 +864,22 @@ function getSubtitlesConfig() {
 function round3(n) { return Math.round(n * 1000) / 1000; }
 
 // === Telegram ===
-let telegramChatId = null;
-let telegramToken = null;
+let telegramConnected = false;
+
+async function loadTelegramStatus() {
+    try {
+        const res = await fetch('/api/telegram');
+        const data = await res.json();
+        if (data.connected) {
+            telegramConnected = true;
+            document.getElementById('telegramEnabled').checked = true;
+            document.getElementById('telegramPanel').style.display = '';
+            document.getElementById('telegramSetup').style.display = 'none';
+            document.getElementById('telegramConnected').style.display = 'flex';
+            document.getElementById('telegramChatName').textContent = data.chat_name;
+        }
+    } catch {}
+}
 
 function toggleTelegram() {
     const enabled = document.getElementById('telegramEnabled').checked;
@@ -889,8 +904,7 @@ async function connectTelegram() {
         }
 
         const data = await res.json();
-        telegramToken = token;
-        telegramChatId = data.chat_id;
+        telegramConnected = true;
 
         document.getElementById('telegramChatName').textContent = data.chat_name;
         document.getElementById('telegramSetup').style.display = 'none';
@@ -900,18 +914,12 @@ async function connectTelegram() {
     }
 }
 
-function disconnectTelegram() {
-    telegramToken = null;
-    telegramChatId = null;
+async function disconnectTelegram() {
+    await fetch('/api/telegram', { method: 'DELETE' });
+    telegramConnected = false;
     document.getElementById('telegramSetup').style.display = '';
     document.getElementById('telegramConnected').style.display = 'none';
     document.getElementById('telegramToken').value = '';
-}
-
-function getTelegramConfig() {
-    if (!document.getElementById('telegramEnabled').checked) return undefined;
-    if (!telegramToken || !telegramChatId) return undefined;
-    return { token: telegramToken, chat_id: telegramChatId };
 }
 
 // === Render ===
@@ -946,7 +954,6 @@ async function renderVideo() {
                     };
                 }),
                 profile: currentProfileSlug,
-                telegram: getTelegramConfig(),
                 subtitles: getSubtitlesConfig(),
             }),
         });

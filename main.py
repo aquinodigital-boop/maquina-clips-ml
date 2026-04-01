@@ -241,9 +241,38 @@ async def transcribe_clips(session_id: str, payload: dict):
 
 # ==================== TELEGRAM ====================
 
+TELEGRAM_FILE = BASE_DIR / "telegram.json"
+
+
+def load_telegram_config():
+    if TELEGRAM_FILE.exists():
+        with open(TELEGRAM_FILE) as f:
+            return json.load(f)
+    return {}
+
+
+def save_telegram_config(config):
+    with open(TELEGRAM_FILE, "w") as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+
+
+@app.get("/api/telegram")
+async def get_telegram_config_endpoint():
+    """Retorna config do Telegram salva (sem expor o token completo)."""
+    config = load_telegram_config()
+    if config.get("token"):
+        return {
+            "connected": True,
+            "chat_name": config.get("chat_name", ""),
+            "chat_id": config.get("chat_id"),
+            "token_hint": config["token"][:8] + "..." + config["token"][-4:],
+        }
+    return {"connected": False}
+
+
 @app.post("/api/telegram/connect")
 async def telegram_connect(payload: dict):
-    """Detecta o chat ID do bot Telegram usando getUpdates."""
+    """Detecta o chat ID do bot Telegram e salva no backend."""
     token = payload.get("token", "").strip()
     if not token:
         raise HTTPException(400, "Token é obrigatório")
@@ -260,7 +289,6 @@ async def telegram_connect(payload: dict):
             if not results:
                 raise HTTPException(400, "Nenhuma mensagem encontrada. Mande qualquer mensagem para o bot primeiro!")
 
-            # Pega o chat mais recente
             last = results[-1]
             chat = last.get("message", {}).get("chat", {})
             chat_id = chat.get("id")
@@ -269,10 +297,24 @@ async def telegram_connect(payload: dict):
             if not chat_id:
                 raise HTTPException(400, "Não foi possível detectar o chat. Mande uma mensagem para o bot e tente novamente.")
 
+            # Salva no backend
+            save_telegram_config({
+                "token": token,
+                "chat_id": chat_id,
+                "chat_name": chat_name,
+            })
+
             return {"chat_id": chat_id, "chat_name": chat_name}
 
     except httpx.HTTPError:
         raise HTTPException(500, "Erro ao conectar com o Telegram. Verifique sua conexão.")
+
+
+@app.delete("/api/telegram")
+async def disconnect_telegram():
+    """Remove config do Telegram."""
+    save_telegram_config({})
+    return {"ok": True}
 
 
 async def send_telegram_notification(token, chat_id, result):
@@ -749,11 +791,11 @@ async def render_video(session_id: str, payload: dict):
             "profile": profile_name,
         }
 
-        # Telegram notification
-        telegram = payload.get("telegram")
-        if telegram and telegram.get("token") and telegram.get("chat_id"):
+        # Telegram notification (sempre envia se configurado)
+        tg_config = load_telegram_config()
+        if tg_config.get("token") and tg_config.get("chat_id"):
             await send_telegram_notification(
-                telegram["token"], telegram["chat_id"], result
+                tg_config["token"], tg_config["chat_id"], result
             )
 
         return result
