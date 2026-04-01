@@ -375,14 +375,14 @@ def _hex_to_rgb(hex_color):
 
 
 def build_subtitle_clip(words, video_duration, video_size, style):
-    """Cria UM ÚNICO clip de legenda eficiente usando make_frame."""
+    """Cria um clip que renderiza legendas diretamente sobre o vídeo."""
     if not words:
         return None
 
     sub_style = style.get("subtitle_style", "word_by_word")
     group_size = style.get("words_per_group", 5 if sub_style == "highlight" else 8)
 
-    # Pré-computa os grupos de palavras e seus intervalos
+    # Pré-computa os segmentos
     if sub_style == "word_by_word":
         segments = [{"text": w["word"], "highlight": w["word"],
                      "start": w["start"], "end": w["end"]} for w in words]
@@ -402,25 +402,56 @@ def build_subtitle_clip(words, video_duration, video_size, style):
             segments.append({"text": phrase, "highlight": None,
                              "start": group[0]["start"], "end": group[-1]["end"]})
 
-    # Cache de frames renderizados
-    frame_cache = {}
-    transparent_frame = np.zeros((video_size[1], video_size[0], 4), dtype=np.uint8)
+    return {"segments": segments, "style": style, "video_size": video_size}
 
-    def make_subtitle_frame(t):
-        # Encontra o segmento ativo no tempo t
+
+def burn_subtitles_into_clip(final_clip, sub_data):
+    """Queima as legendas diretamente nos frames do vídeo (burn-in)."""
+    if not sub_data:
+        return final_clip
+
+    segments = sub_data["segments"]
+    style = sub_data["style"]
+    video_size = sub_data["video_size"]
+
+    # Cache de frames de legenda
+    frame_cache = {}
+
+    original_make_frame = final_clip.make_frame
+
+    def make_frame_with_subs(t):
+        base_frame = original_make_frame(t)
+
+        # Encontra o segmento ativo
+        active_seg = None
         for idx, seg in enumerate(segments):
             if seg["start"] <= t < seg["end"]:
-                cache_key = (idx, seg["text"], seg["highlight"])
-                if cache_key not in frame_cache:
-                    frame_cache[cache_key] = create_subtitle_frame(
-                        seg["text"], seg["highlight"], video_size, style
-                    )
-                return frame_cache[cache_key]
-        return transparent_frame
+                active_seg = (idx, seg)
+                break
 
-    sub_clip = VideoClip(make_subtitle_frame, duration=video_duration)
-    sub_clip = sub_clip.with_position((0, 0))
-    return sub_clip
+        if active_seg is None:
+            return base_frame
+
+        idx, seg = active_seg
+        cache_key = (idx, seg["text"], seg["highlight"])
+        if cache_key not in frame_cache:
+            frame_cache[cache_key] = create_subtitle_frame(
+                seg["text"], seg["highlight"], video_size, style
+            )
+
+        sub_frame = frame_cache[cache_key]
+
+        # Combina: usa o canal alpha da legenda para sobrepor
+        alpha = sub_frame[:, :, 3:4].astype(np.float32) / 255.0
+        rgb = sub_frame[:, :, :3].astype(np.float32)
+        base = base_frame.astype(np.float32)
+
+        # Blend
+        result = base * (1 - alpha) + rgb * alpha
+        return result.astype(np.uint8)
+
+    new_clip = final_clip.with_make_frame(make_frame_with_subs)
+    return new_clip
 
 
 # ==================== RENDER ====================
@@ -599,24 +630,17 @@ async def render_video(session_id: str, payload: dict):
 
         final = apply_transition(normalized_clips, transition, transition_duration)
 
-        # Overlay subtitles if provided
+        # Burn subtitles diretamente nos frames se ativado
         if subtitles_config and subtitles_config.get("enabled"):
             words = subtitles_config.get("words", [])
             style = subtitles_config.get("style", {})
 
             if words:
-                sub_clip = build_subtitle_clip(
+                sub_data = build_subtitle_clip(
                     words, final.duration, (target_w, target_h), style
                 )
-                if sub_clip:
-                    original_audio = final.audio
-                    final = CompositeVideoClip(
-                        [final, sub_clip],
-                        size=(target_w, target_h),
-                    )
-                    # Preserva o áudio original (CompositeVideoClip pode perdê-lo)
-                    if original_audio is not None:
-                        final = final.with_audio(original_audio)
+                if sub_data:
+                    final = burn_subtitles_into_clip(final, sub_data)
 
         output_name = generate_output_name(profile_name, session_dir)
         output_path = session_dir / output_name
