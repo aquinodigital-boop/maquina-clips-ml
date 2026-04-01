@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Montador Expresso - Meli Clips</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
+    <link rel="stylesheet" href="/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <h1>🎬 Montador Expresso</h1>
+            <p class="subtitle">Meli Clips — Arraste os cortes e monte seu vídeo longo</p>
+        </header>
+
+        <!-- Stats Bar -->
+        <div class="stats-bar" id="statsBar" style="display: none;">
+            <div class="stat">
+                <span class="stat-value" id="statClips">0</span>
+                <span class="stat-label">Clipes</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value" id="statDuration">00:00</span>
+                <span class="stat-label">Duração Total</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value" id="statSize">0 MB</span>
+                <span class="stat-label">Tamanho</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value" id="statResolution">—</span>
+                <span class="stat-label">Resolução</span>
+            </div>
+        </div>
+
+        <!-- Drop Zone -->
+        <div class="drop-zone" id="dropZone">
+            <div class="drop-zone-content">
+                <div class="drop-icon">📁</div>
+                <p class="drop-text">Arraste vídeos aqui ou clique para selecionar</p>
+                <p class="drop-hint">MP4 e MOV • Até 500 MB por arquivo</p>
+                <input type="file" id="fileInput" multiple accept=".mp4,.mov,video/mp4,video/quicktime" hidden>
+            </div>
+        </div>
+
+        <!-- Clip List -->
+        <div class="clips-section" id="clipsSection" style="display: none;">
+            <div class="section-header">
+                <h2>Ordem dos Clipes</h2>
+                <span class="drag-hint">Arraste para reordenar</span>
+            </div>
+            <div class="clip-list" id="clipList"></div>
+        </div>
+
+        <!-- Settings -->
+        <div class="settings-section" id="settingsSection" style="display: none;">
+            <h2>Configurações de Saída</h2>
+            <div class="settings-grid">
+                <div class="setting">
+                    <label for="fpsSelect">FPS</label>
+                    <select id="fpsSelect">
+                        <option value="24">24</option>
+                        <option value="30" selected>30</option>
+                        <option value="60">60</option>
+                    </select>
+                </div>
+                <div class="setting">
+                    <label for="codecSelect">Codec</label>
+                    <select id="codecSelect">
+                        <option value="libx264">H.264 (compatível)</option>
+                        <option value="libx265">H.265 (menor)</option>
+                    </select>
+                </div>
+                <div class="setting">
+                    <label for="fileNameInput">Nome do arquivo</label>
+                    <input type="text" id="fileNameInput" value="video_montado.mp4">
+                </div>
+            </div>
+        </div>
+
+        <!-- Render Button -->
+        <button class="render-btn" id="renderBtn" style="display: none;" onclick="renderVideo()">
+            🚀 Gerar Vídeo Longo
+        </button>
+
+        <!-- Progress -->
+        <div class="progress-section" id="progressSection" style="display: none;">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <p class="progress-text" id="progressText">Preparando...</p>
+        </div>
+
+        <!-- Download -->
+        <div class="download-section" id="downloadSection" style="display: none;">
+            <div class="success-icon">✅</div>
+            <p class="success-text">Vídeo finalizado com sucesso!</p>
+            <p class="success-detail" id="successDetail"></p>
+            <a class="download-btn" id="downloadBtn" download>
+                ⬇️ Baixar Vídeo Pronto
+            </a>
+            <button class="new-btn" onclick="resetApp()">Montar outro vídeo</button>
+        </div>
+
+        <!-- Video Preview Modal -->
+        <div class="modal-overlay" id="previewModal" style="display: none;" onclick="closePreview(event)">
+            <div class="modal-content">
+                <button class="modal-close" onclick="closePreview()">&times;</button>
+                <video id="previewVideo" controls></video>
+            </div>
+        </div>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+</html>

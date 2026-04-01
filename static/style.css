@@ -1,0 +1,441 @@
+/* === Reset & Base === */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --bg: #0E1117;
+    --bg-card: #1A1D24;
+    --bg-hover: #22262E;
+    --border: #2D3139;
+    --accent: #FF6B35;
+    --accent-light: #FF8F65;
+    --text: #FAFAFA;
+    --text-dim: #8B8D93;
+    --danger: #E54545;
+    --success: #2ECC71;
+    --radius: 12px;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+}
+
+/* === App Layout === */
+.app {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+}
+
+/* === Header === */
+.header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.header h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+}
+
+.subtitle {
+    color: var(--text-dim);
+    font-size: 1.05rem;
+}
+
+/* === Stats Bar === */
+.stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.stat {
+    background: linear-gradient(135deg, var(--accent), var(--accent-light));
+    border-radius: var(--radius);
+    padding: 1rem;
+    text-align: center;
+}
+
+.stat-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    opacity: 0.9;
+}
+
+/* === Drop Zone === */
+.drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 2rem;
+}
+
+.drop-zone:hover,
+.drop-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(255, 107, 53, 0.05);
+}
+
+.drop-icon { font-size: 3rem; margin-bottom: 1rem; }
+
+.drop-text {
+    font-size: 1.1rem;
+    font-weight: 500;
+    margin-bottom: 0.3rem;
+}
+
+.drop-hint {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+}
+
+/* === Clips Section === */
+.clips-section { margin-bottom: 2rem; }
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.section-header h2 { font-size: 1.2rem; }
+
+.drag-hint {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+}
+
+/* === Clip Item === */
+.clip-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.8rem 1rem;
+    margin-bottom: 0.5rem;
+    cursor: grab;
+    transition: all 0.15s;
+    user-select: none;
+}
+
+.clip-item:hover { background: var(--bg-hover); }
+
+.clip-item.sortable-ghost {
+    opacity: 0.4;
+    border-color: var(--accent);
+}
+
+.clip-item.sortable-drag {
+    background: var(--bg-card);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.clip-handle {
+    color: var(--text-dim);
+    font-size: 1.2rem;
+    cursor: grab;
+    flex-shrink: 0;
+}
+
+.clip-number {
+    background: var(--accent);
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+.clip-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.clip-name {
+    font-weight: 500;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.clip-meta {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    margin-top: 0.15rem;
+}
+
+.clip-actions {
+    display: flex;
+    gap: 0.4rem;
+    flex-shrink: 0;
+}
+
+.clip-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+}
+
+.clip-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+    border-color: var(--text-dim);
+}
+
+.clip-btn.delete:hover {
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+/* === Settings === */
+.settings-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.settings-section h2 {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+}
+
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+.setting label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-bottom: 0.4rem;
+}
+
+.setting select,
+.setting input {
+    width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 0.8rem;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.setting select:focus,
+.setting input:focus {
+    border-color: var(--accent);
+}
+
+/* === Buttons === */
+.render-btn {
+    width: 100%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-light));
+    color: white;
+    border: none;
+    border-radius: var(--radius);
+    padding: 1rem;
+    font-size: 1.15rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.2s;
+}
+
+.render-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(255, 107, 53, 0.3);
+}
+
+.render-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* === Progress === */
+.progress-section {
+    text-align: center;
+    margin-top: 1.5rem;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-card);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 0.8rem;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-light));
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.4s ease;
+}
+
+.progress-text {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+}
+
+/* === Download === */
+.download-section {
+    text-align: center;
+    margin-top: 2rem;
+    padding: 2rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.success-icon { font-size: 3rem; margin-bottom: 0.8rem; }
+
+.success-text {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+}
+
+.success-detail {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+}
+
+.download-btn {
+    display: inline-block;
+    background: linear-gradient(135deg, var(--success), #27ae60);
+    color: white;
+    text-decoration: none;
+    padding: 0.9rem 2.5rem;
+    border-radius: var(--radius);
+    font-size: 1.1rem;
+    font-weight: 600;
+    transition: transform 0.1s;
+    margin-bottom: 1rem;
+}
+
+.download-btn:hover { transform: translateY(-1px); }
+
+.new-btn {
+    display: block;
+    margin: 0 auto;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 0.6rem 1.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.15s;
+}
+
+.new-btn:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
+}
+
+/* === Modal === */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 2rem;
+}
+
+.modal-content {
+    position: relative;
+    max-width: 800px;
+    width: 100%;
+}
+
+.modal-close {
+    position: absolute;
+    top: -40px;
+    right: 0;
+    background: none;
+    border: none;
+    color: white;
+    font-size: 2rem;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.15s;
+}
+
+.modal-close:hover { opacity: 1; }
+
+.modal-content video {
+    width: 100%;
+    border-radius: var(--radius);
+}
+
+/* === Upload spinner on clip item === */
+.clip-item.uploading {
+    opacity: 0.6;
+}
+
+.upload-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* === Responsive === */
+@media (max-width: 600px) {
+    .stats-bar { grid-template-columns: repeat(2, 1fr); }
+    .settings-grid { grid-template-columns: 1fr; }
+    .stat-value { font-size: 1.2rem; }
+    .header h1 { font-size: 1.6rem; }
+    .clip-meta { display: none; }
+}
