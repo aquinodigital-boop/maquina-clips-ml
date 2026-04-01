@@ -1,15 +1,14 @@
-// === Estado da aplicação ===
+// === Estado ===
 let sessionId = null;
 let clips = [];
-// Cada clip: { clip_id, filename, stored_name, duration, width, height, fps, size_bytes,
-//              trim_start, trim_end, uploading, expanded }
+let profiles = {};
+let currentProfileSlug = '';
 
 // === Elementos ===
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 const clipList = document.getElementById('clipList');
 const clipsSection = document.getElementById('clipsSection');
-const settingsSection = document.getElementById('settingsSection');
 const statsBar = document.getElementById('statsBar');
 const renderBtn = document.getElementById('renderBtn');
 const progressSection = document.getElementById('progressSection');
@@ -17,35 +16,132 @@ const progressFill = document.getElementById('progressFill');
 const progressText = document.getElementById('progressText');
 const downloadSection = document.getElementById('downloadSection');
 const downloadBtn = document.getElementById('downloadBtn');
+const previewSection = document.getElementById('previewSection');
+const webhookSection = document.getElementById('webhookSection');
 
-// === Inicialização ===
+// === Init ===
 async function init() {
-    const res = await fetch('/api/sessions', { method: 'POST' });
-    const data = await res.json();
-    sessionId = data.session_id;
-
+    const [sessionRes, profilesRes] = await Promise.all([
+        fetch('/api/sessions', { method: 'POST' }),
+        fetch('/api/profiles'),
+    ]);
+    sessionId = (await sessionRes.json()).session_id;
+    profiles = await profilesRes.json();
+    renderProfileSelect();
     setupDropZone();
     setupSortable();
 }
 
+// === Profiles ===
+function renderProfileSelect() {
+    const select = document.getElementById('profileSelect');
+    select.innerHTML = '';
+    for (const [slug, prof] of Object.entries(profiles)) {
+        const opt = document.createElement('option');
+        opt.value = slug;
+        opt.textContent = prof.name;
+        select.appendChild(opt);
+    }
+    if (!currentProfileSlug || !profiles[currentProfileSlug]) {
+        currentProfileSlug = Object.keys(profiles)[0] || '';
+    }
+    select.value = currentProfileSlug;
+    onProfileChange();
+}
+
+function onProfileChange() {
+    const select = document.getElementById('profileSelect');
+    currentProfileSlug = select.value;
+    updateUI();
+}
+
+function getCurrentProfile() {
+    return profiles[currentProfileSlug] || {};
+}
+
+function openProfileEditor(isNew) {
+    const editor = document.getElementById('profileEditor');
+    const title = document.getElementById('profileEditorTitle');
+    const deleteBtn = document.getElementById('profDeleteBtn');
+    editor.style.display = '';
+
+    if (isNew) {
+        title.textContent = 'Novo Perfil';
+        deleteBtn.style.display = 'none';
+        document.getElementById('profName').value = '';
+        document.getElementById('profAspect').value = '1:1';
+        document.getElementById('profFps').value = '30';
+        document.getElementById('profCodec').value = 'libx264';
+        document.getElementById('profTransition').value = 'cut';
+        document.getElementById('profTransDuration').value = '0.5';
+        document.getElementById('profNormAudio').checked = true;
+        editor.dataset.mode = 'new';
+    } else {
+        const prof = getCurrentProfile();
+        title.textContent = `Editar: ${prof.name || ''}`;
+        deleteBtn.style.display = '';
+        document.getElementById('profName').value = prof.name || '';
+        document.getElementById('profAspect').value = prof.aspect_ratio || '1:1';
+        document.getElementById('profFps').value = String(prof.fps || 30);
+        document.getElementById('profCodec').value = prof.codec || 'libx264';
+        document.getElementById('profTransition').value = prof.transition || 'cut';
+        document.getElementById('profTransDuration').value = String(prof.transition_duration || 0.5);
+        document.getElementById('profNormAudio').checked = prof.normalize_audio !== false;
+        editor.dataset.mode = 'edit';
+    }
+}
+
+function closeProfileEditor() {
+    document.getElementById('profileEditor').style.display = 'none';
+}
+
+async function saveProfile() {
+    const editor = document.getElementById('profileEditor');
+    const name = document.getElementById('profName').value.trim();
+    if (!name) { alert('Nome do perfil é obrigatório'); return; }
+
+    const data = {
+        name,
+        slug: editor.dataset.mode === 'edit' ? currentProfileSlug : undefined,
+        aspect_ratio: document.getElementById('profAspect').value,
+        fps: parseInt(document.getElementById('profFps').value),
+        codec: document.getElementById('profCodec').value,
+        transition: document.getElementById('profTransition').value,
+        transition_duration: parseFloat(document.getElementById('profTransDuration').value),
+        normalize_audio: document.getElementById('profNormAudio').checked,
+    };
+
+    const res = await fetch('/api/profiles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    profiles = await (await fetch('/api/profiles')).json();
+    currentProfileSlug = result.slug;
+    renderProfileSelect();
+    closeProfileEditor();
+}
+
+async function deleteProfile() {
+    if (!confirm(`Excluir perfil "${getCurrentProfile().name}"?`)) return;
+    await fetch(`/api/profiles/${currentProfileSlug}`, { method: 'DELETE' });
+    profiles = await (await fetch('/api/profiles')).json();
+    currentProfileSlug = Object.keys(profiles)[0] || '';
+    renderProfileSelect();
+    closeProfileEditor();
+}
+
+// === Drop Zone ===
 function setupDropZone() {
     dropZone.addEventListener('click', () => fileInput.click());
-
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropZone.classList.add('dragover');
-    });
-
-    dropZone.addEventListener('dragleave', () => {
-        dropZone.classList.remove('dragover');
-    });
-
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
         dropZone.classList.remove('dragover');
         handleFiles(e.dataTransfer.files);
     });
-
     fileInput.addEventListener('change', () => {
         handleFiles(fileInput.files);
         fileInput.value = '';
@@ -62,6 +158,7 @@ function setupSortable() {
             const [moved] = clips.splice(evt.oldIndex, 1);
             clips.splice(evt.newIndex, 0, moved);
             renderClipList();
+            updateUI();
         }
     });
 }
@@ -71,85 +168,75 @@ async function handleFiles(fileList) {
     const files = Array.from(fileList).filter(f =>
         f.name.toLowerCase().endsWith('.mp4') || f.name.toLowerCase().endsWith('.mov')
     );
-    if (files.length === 0) return;
-
-    for (const file of files) {
-        await uploadFile(file);
-    }
+    for (const file of files) await uploadFile(file);
 }
 
 async function uploadFile(file) {
     const tempId = 'temp_' + Math.random().toString(36).slice(2, 8);
-    const placeholder = {
-        clip_id: tempId,
-        filename: file.name,
-        stored_name: null,
-        duration: 0, width: 0, height: 0, fps: 0,
-        size_bytes: file.size,
-        trim_start: 0,
-        trim_end: 0,
-        uploading: true,
-        expanded: false,
-    };
-    clips.push(placeholder);
+    clips.push({
+        clip_id: tempId, filename: file.name, stored_name: null,
+        duration: 0, width: 0, height: 0, fps: 0, size_bytes: file.size,
+        trim_start: 0, trim_end: 0, uploading: true, expanded: false,
+    });
     renderClipList();
     updateUI();
 
     try {
         const formData = new FormData();
         formData.append('file', file);
-
         const res = await fetch(`/api/sessions/${sessionId}/clips`, {
-            method: 'POST',
-            body: formData,
+            method: 'POST', body: formData,
         });
-
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.detail || 'Erro no upload');
-        }
-
-        const clipInfo = await res.json();
+        if (!res.ok) throw new Error((await res.json()).detail || 'Erro no upload');
+        const info = await res.json();
         const idx = clips.findIndex(c => c.clip_id === tempId);
         if (idx >= 0) {
             clips[idx] = {
-                ...clipInfo,
-                trim_start: 0,
-                trim_end: clipInfo.duration,
-                uploading: false,
-                expanded: false,
+                ...info, trim_start: 0, trim_end: info.duration,
+                uploading: false, expanded: false,
             };
         }
     } catch (err) {
         clips = clips.filter(c => c.clip_id !== tempId);
         alert(`Erro ao enviar "${file.name}": ${err.message}`);
     }
-
     renderClipList();
     updateUI();
 }
 
-// === Renderização da lista ===
+// === Clip List ===
 function renderClipList() {
     clipList.innerHTML = '';
+    const prof = getCurrentProfile();
+    const targetAR = prof.aspect_ratio || '1:1';
+    const [arW, arH] = targetAR.split(':').map(Number);
+    const targetRatio = arW / arH;
 
     clips.forEach((clip, index) => {
         const el = document.createElement('div');
         const isTrimmed = !clip.uploading && (clip.trim_start > 0.05 || clip.trim_end < clip.duration - 0.05);
         const trimmedDuration = clip.uploading ? 0 : (clip.trim_end - clip.trim_start);
 
-        el.className = 'clip-item' + (clip.uploading ? ' uploading' : '') + (clip.expanded ? ' expanded' : '');
+        // Check resolution mismatch
+        let resMismatch = false;
+        if (!clip.uploading && clip.width && clip.height) {
+            const clipRatio = clip.width / clip.height;
+            resMismatch = Math.abs(clipRatio - targetRatio) > 0.05;
+        }
+
+        el.className = 'clip-item'
+            + (clip.uploading ? ' uploading' : '')
+            + (clip.expanded ? ' expanded' : '')
+            + (resMismatch ? ' resolution-mismatch' : '');
         el.dataset.id = clip.clip_id;
 
-        // Meta text
         let metaText = '';
         if (clip.uploading) {
             metaText = 'Enviando...';
         } else {
             metaText = `${formatDuration(trimmedDuration)} · ${clip.width}x${clip.height} · ${clip.fps}fps`;
-            if (isTrimmed) {
-                metaText += ` <span class="trim-badge">CORTADO</span>`;
-            }
+            if (isTrimmed) metaText += ' <span class="trim-badge">CORTADO</span>';
+            if (resMismatch) metaText += ` <span class="res-warn">⚠ ${clip.width}x${clip.height} → ${targetAR}</span>`;
         }
 
         el.innerHTML = `
@@ -164,31 +251,25 @@ function renderClipList() {
                     ${clip.uploading
                         ? '<div class="upload-spinner"></div>'
                         : `<button class="clip-btn ${clip.expanded ? 'active' : ''}" onclick="toggleExpand('${clip.clip_id}')" title="Cortar trecho">✂</button>
-                           <button class="clip-btn delete" onclick="removeClip('${clip.clip_id}', '${clip.stored_name}')" title="Remover">✕</button>`
-                    }
+                           <button class="clip-btn delete" onclick="removeClip('${clip.clip_id}', '${clip.stored_name}')" title="Remover">✕</button>`}
                 </div>
             </div>
             ${!clip.uploading ? `
-            <div class="trim-editor" id="trim-${clip.clip_id}">
+            <div class="trim-editor">
                 <video class="trim-preview" id="video-${clip.clip_id}"
                     src="/api/sessions/${sessionId}/clips/${clip.stored_name}/preview"
                     preload="metadata"></video>
-
                 <div class="trim-range-container">
                     <div class="trim-range-track" id="track-${clip.clip_id}"
-                        onmousedown="onTrackClick(event, '${clip.clip_id}')"
-                        ontouchstart="onTrackClick(event, '${clip.clip_id}')">
+                        onmousedown="onTrackClick(event, '${clip.clip_id}')">
                         <div class="trim-range-selected" id="selected-${clip.clip_id}"></div>
                         <div class="trim-range-playhead" id="playhead-${clip.clip_id}"></div>
-                        <div class="trim-range-handle start" id="handle-start-${clip.clip_id}"
-                            onmousedown="startDragHandle(event, '${clip.clip_id}', 'start')"
-                            ontouchstart="startDragHandle(event, '${clip.clip_id}', 'start')"></div>
-                        <div class="trim-range-handle end" id="handle-end-${clip.clip_id}"
-                            onmousedown="startDragHandle(event, '${clip.clip_id}', 'end')"
-                            ontouchstart="startDragHandle(event, '${clip.clip_id}', 'end')"></div>
+                        <div class="trim-range-handle start"
+                            onmousedown="startDragHandle(event, '${clip.clip_id}', 'start')"></div>
+                        <div class="trim-range-handle end"
+                            onmousedown="startDragHandle(event, '${clip.clip_id}', 'end')"></div>
                     </div>
                 </div>
-
                 <div class="trim-controls">
                     <div class="trim-time-group">
                         <label>Início</label>
@@ -208,13 +289,10 @@ function renderClipList() {
                     <button class="trim-play-btn" onclick="playTrimmed('${clip.clip_id}')">▶ Preview</button>
                     <button class="trim-reset-btn" onclick="resetTrim('${clip.clip_id}')">Resetar</button>
                 </div>
-            </div>
-            ` : ''}
+            </div>` : ''}
         `;
-
         clipList.appendChild(el);
 
-        // Atualiza as posições visuais do range
         if (!clip.uploading) {
             requestAnimationFrame(() => updateTrimVisuals(clip.clip_id));
         }
@@ -222,42 +300,89 @@ function renderClipList() {
 }
 
 function updateUI() {
-    const activeClips = clips.filter(c => !c.uploading);
-    const hasClips = activeClips.length > 0;
+    const active = clips.filter(c => !c.uploading);
+    const hasClips = active.length > 0;
 
     clipsSection.style.display = hasClips ? '' : 'none';
-    settingsSection.style.display = hasClips ? '' : 'none';
     statsBar.style.display = hasClips ? '' : 'none';
     renderBtn.style.display = hasClips ? '' : 'none';
+    previewSection.style.display = hasClips ? '' : 'none';
+    webhookSection.style.display = hasClips ? '' : 'none';
+
+    const prof = getCurrentProfile();
 
     if (hasClips) {
-        document.getElementById('statClips').textContent = activeClips.length;
-        // Duração final = soma dos trechos cortados
-        const totalTrimmed = activeClips.reduce((sum, c) => sum + (c.trim_end - c.trim_start), 0);
+        document.getElementById('statClips').textContent = active.length;
+        const totalTrimmed = active.reduce((s, c) => s + (c.trim_end - c.trim_start), 0);
         document.getElementById('statDuration').textContent = formatDuration(totalTrimmed);
-        document.getElementById('statSize').textContent = formatSize(
-            activeClips.reduce((sum, c) => sum + c.size_bytes, 0)
-        );
-        const first = activeClips[0];
-        document.getElementById('statResolution').textContent =
-            first.width ? `${first.width}x${first.height}` : '-';
+        document.getElementById('statAspect').textContent = prof.aspect_ratio || '1:1';
+
+        const transLabels = { cut: 'Corte', fade: 'Fade', dissolve: 'Dissolve', flash: 'Flash' };
+        document.getElementById('statTransition').textContent = transLabels[prof.transition] || 'Corte';
+
+        // Warnings
+        checkResolutionWarnings(active, prof);
+
+        // Preview timeline
+        renderPreviewTimeline(active, prof);
     }
 }
 
-// === Trim: expand/collapse ===
+function checkResolutionWarnings(active, prof) {
+    const warningsDiv = document.getElementById('warnings');
+    const targetAR = prof.aspect_ratio || '1:1';
+    const [arW, arH] = targetAR.split(':').map(Number);
+    const targetRatio = arW / arH;
+
+    const mismatched = active.filter(c => {
+        if (!c.width || !c.height) return false;
+        return Math.abs((c.width / c.height) - targetRatio) > 0.05;
+    });
+
+    if (mismatched.length > 0) {
+        warningsDiv.style.display = '';
+        warningsDiv.innerHTML = mismatched.map(c =>
+            `<div class="warning-item">⚠ "${c.filename}" (${c.width}x${c.height}) será ajustado para ${targetAR} com letterbox preto</div>`
+        ).join('');
+    } else {
+        warningsDiv.style.display = 'none';
+        warningsDiv.innerHTML = '';
+    }
+}
+
+function renderPreviewTimeline(active, prof) {
+    const timeline = document.getElementById('previewTimeline');
+    const transLabels = { cut: '|', fade: '◼', dissolve: '✕', flash: '⚡' };
+    const totalDur = active.reduce((s, c) => s + (c.trim_end - c.trim_start), 0);
+    let currentTime = 0;
+    let html = '';
+
+    active.forEach((clip, i) => {
+        const dur = clip.trim_end - clip.trim_start;
+        const widthPct = Math.max(8, (dur / totalDur) * 100);
+
+        html += `<div class="preview-block" style="flex-basis: ${widthPct}%">
+            <div class="pb-name">${clip.filename}</div>
+            <div class="pb-time">${formatDuration(currentTime)} - ${formatDuration(currentTime + dur)}</div>
+        </div>`;
+
+        currentTime += dur;
+
+        if (i < active.length - 1 && prof.transition !== 'cut') {
+            html += `<div class="preview-transition">${transLabels[prof.transition] || '|'}</div>`;
+        }
+    });
+
+    timeline.innerHTML = html;
+}
+
+// === Trim Functions ===
 function toggleExpand(clipId) {
     const clip = clips.find(c => c.clip_id === clipId);
     if (!clip || clip.uploading) return;
-
-    // Fecha todos os outros
-    clips.forEach(c => {
-        if (c.clip_id !== clipId) c.expanded = false;
-    });
-
+    clips.forEach(c => { if (c.clip_id !== clipId) c.expanded = false; });
     clip.expanded = !clip.expanded;
     renderClipList();
-
-    // Se expandiu, scrollar até o clipe
     if (clip.expanded) {
         requestAnimationFrame(() => {
             const el = document.querySelector(`[data-id="${clipId}"]`);
@@ -266,52 +391,34 @@ function toggleExpand(clipId) {
     }
 }
 
-// === Trim: visual range ===
 function updateTrimVisuals(clipId) {
     const clip = clips.find(c => c.clip_id === clipId);
     if (!clip) return;
-
     const selected = document.getElementById(`selected-${clipId}`);
-    const handleStart = document.getElementById(`handle-start-${clipId}`);
-    const handleEnd = document.getElementById(`handle-end-${clipId}`);
-
-    if (!selected || !handleStart || !handleEnd) return;
-
+    if (!selected) return;
     const startPct = (clip.trim_start / clip.duration) * 100;
     const endPct = (clip.trim_end / clip.duration) * 100;
-
     selected.style.left = startPct + '%';
     selected.style.width = (endPct - startPct) + '%';
-
-    handleStart.style.left = `calc(${startPct}% - 7px)`;
-    handleEnd.style.left = `calc(${endPct}% - 7px)`;
 }
 
-// === Trim: drag handles ===
 function startDragHandle(e, clipId, which) {
     e.preventDefault();
     e.stopPropagation();
-
     const clip = clips.find(c => c.clip_id === clipId);
     if (!clip) return;
-
     const track = document.getElementById(`track-${clipId}`);
     const rect = track.getBoundingClientRect();
 
     function onMove(ev) {
-        const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
-        let pct = (clientX - rect.left) / rect.width;
-        pct = Math.max(0, Math.min(1, pct));
+        const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+        let pct = Math.max(0, Math.min(1, (cx - rect.left) / rect.width));
         const time = pct * clip.duration;
-
         if (which === 'start') {
-            clip.trim_start = Math.min(time, clip.trim_end - 0.1);
-            clip.trim_start = Math.max(0, clip.trim_start);
+            clip.trim_start = Math.max(0, Math.min(time, clip.trim_end - 0.1));
         } else {
-            clip.trim_end = Math.max(time, clip.trim_start + 0.1);
-            clip.trim_end = Math.min(clip.duration, clip.trim_end);
+            clip.trim_end = Math.min(clip.duration, Math.max(time, clip.trim_start + 0.1));
         }
-
         updateTrimVisuals(clipId);
         updateTrimInputs(clipId);
         updateTrimDurationLabel(clipId);
@@ -323,7 +430,6 @@ function startDragHandle(e, clipId, which) {
         document.removeEventListener('mouseup', onUp);
         document.removeEventListener('touchmove', onMove);
         document.removeEventListener('touchend', onUp);
-        renderClipList();
     }
 
     document.addEventListener('mousemove', onMove);
@@ -332,171 +438,139 @@ function startDragHandle(e, clipId, which) {
     document.addEventListener('touchend', onUp);
 }
 
-// === Trim: click on track to seek ===
 function onTrackClick(e, clipId) {
     if (e.target.classList.contains('trim-range-handle')) return;
-
     const clip = clips.find(c => c.clip_id === clipId);
     if (!clip) return;
-
     const track = document.getElementById(`track-${clipId}`);
     const video = document.getElementById(`video-${clipId}`);
     const rect = track.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    let pct = (clientX - rect.left) / rect.width;
-    pct = Math.max(0, Math.min(1, pct));
-    const time = pct * clip.duration;
-
-    if (video) {
-        video.currentTime = time;
-    }
-
-    updatePlayhead(clipId, pct);
-}
-
-function updatePlayhead(clipId, pct) {
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const pct = Math.max(0, Math.min(1, (cx - rect.left) / rect.width));
+    if (video) video.currentTime = pct * clip.duration;
     const playhead = document.getElementById(`playhead-${clipId}`);
-    if (playhead) {
-        playhead.style.left = (pct * 100) + '%';
-    }
+    if (playhead) playhead.style.left = (pct * 100) + '%';
 }
 
-// === Trim: time inputs ===
 function updateTrimInputs(clipId) {
     const clip = clips.find(c => c.clip_id === clipId);
     if (!clip) return;
-
-    const startInput = document.getElementById(`input-start-${clipId}`);
-    const endInput = document.getElementById(`input-end-${clipId}`);
-    if (startInput) startInput.value = formatTimePrecise(clip.trim_start);
-    if (endInput) endInput.value = formatTimePrecise(clip.trim_end);
+    const si = document.getElementById(`input-start-${clipId}`);
+    const ei = document.getElementById(`input-end-${clipId}`);
+    if (si) si.value = formatTimePrecise(clip.trim_start);
+    if (ei) ei.value = formatTimePrecise(clip.trim_end);
 }
 
 function updateTrimDurationLabel(clipId) {
     const clip = clips.find(c => c.clip_id === clipId);
     if (!clip) return;
     const label = document.getElementById(`trim-dur-${clipId}`);
-    if (label) {
-        label.textContent = `Trecho: ${formatDuration(clip.trim_end - clip.trim_start)}`;
-    }
+    if (label) label.textContent = `Trecho: ${formatDuration(clip.trim_end - clip.trim_start)}`;
 }
 
 function onTimeInputChange(clipId, which, value) {
     const clip = clips.find(c => c.clip_id === clipId);
     if (!clip) return;
-
     const seconds = parseTime(value);
     if (isNaN(seconds)) return;
-
     if (which === 'start') {
         clip.trim_start = Math.max(0, Math.min(seconds, clip.trim_end - 0.1));
     } else {
         clip.trim_end = Math.min(clip.duration, Math.max(seconds, clip.trim_start + 0.1));
     }
-
     updateTrimVisuals(clipId);
     updateTrimInputs(clipId);
     updateTrimDurationLabel(clipId);
     updateUI();
 }
 
-// === Trim: preview & reset ===
 function playTrimmed(clipId) {
     const clip = clips.find(c => c.clip_id === clipId);
     if (!clip) return;
-
     const video = document.getElementById(`video-${clipId}`);
     if (!video) return;
-
     video.currentTime = clip.trim_start;
     video.play();
-
-    // Atualiza playhead durante a reprodução
-    const playheadInterval = setInterval(() => {
+    const interval = setInterval(() => {
         if (video.paused || video.currentTime >= clip.trim_end) {
             video.pause();
-            clearInterval(playheadInterval);
+            clearInterval(interval);
             return;
         }
         const pct = video.currentTime / clip.duration;
-        updatePlayhead(clipId, pct);
+        const playhead = document.getElementById(`playhead-${clipId}`);
+        if (playhead) playhead.style.left = (pct * 100) + '%';
     }, 50);
 }
 
 function resetTrim(clipId) {
     const clip = clips.find(c => c.clip_id === clipId);
     if (!clip) return;
-
     clip.trim_start = 0;
     clip.trim_end = clip.duration;
-
-    updateTrimVisuals(clipId);
-    updateTrimInputs(clipId);
-    updateTrimDurationLabel(clipId);
-    updateUI();
     renderClipList();
+    updateUI();
 }
 
-// === Ações ===
+// === Actions ===
 async function removeClip(clipId, storedName) {
     clips = clips.filter(c => c.clip_id !== clipId);
     renderClipList();
     updateUI();
-
-    if (storedName) {
-        fetch(`/api/sessions/${sessionId}/clips/${storedName}`, { method: 'DELETE' });
-    }
+    if (storedName) fetch(`/api/sessions/${sessionId}/clips/${storedName}`, { method: 'DELETE' });
 }
 
-// === Renderização do vídeo ===
+// === Webhook ===
+function toggleWebhookUrl() {
+    const enabled = document.getElementById('webhookEnabled').checked;
+    document.getElementById('webhookUrlGroup').style.display = enabled ? '' : 'none';
+}
+
+// === Render ===
 async function renderVideo() {
-    const activeClips = clips.filter(c => !c.uploading);
-    if (activeClips.length === 0) return;
+    const active = clips.filter(c => !c.uploading);
+    if (active.length === 0) return;
 
     renderBtn.disabled = true;
     progressSection.style.display = '';
     downloadSection.style.display = 'none';
 
-    setProgress(10, 'Enviando para renderização...');
+    const prof = getCurrentProfile();
+    const webhookEnabled = document.getElementById('webhookEnabled').checked;
+    const webhookUrl = webhookEnabled ? document.getElementById('webhookUrl').value.trim() : null;
 
-    const fps = parseInt(document.getElementById('fpsSelect').value);
-    const codec = document.getElementById('codecSelect').value;
+    setProgress(15, 'Preparando renderização...');
 
     try {
-        setProgress(20, 'Costurando os cortes (a mágica acontece aqui)...');
+        setProgress(25, 'Costurando os cortes e aplicando transições...');
 
         const res = await fetch(`/api/sessions/${sessionId}/render`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                clips: activeClips.map(c => ({
+                clips: active.map(c => ({
                     stored_name: c.stored_name,
                     trim_start: c.trim_start,
                     trim_end: c.trim_end,
                 })),
-                fps,
-                codec,
+                profile: currentProfileSlug,
+                webhook_url: webhookUrl || undefined,
             }),
         });
 
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.detail || 'Erro na renderização');
-        }
+        if (!res.ok) throw new Error((await res.json()).detail || 'Erro na renderização');
 
         setProgress(100, 'Vídeo finalizado!');
-
         const result = await res.json();
-        const fileName = document.getElementById('fileNameInput').value || 'video_montado.mp4';
 
         downloadBtn.href = result.download_url;
-        downloadBtn.download = fileName;
+        downloadBtn.download = result.filename;
         document.getElementById('successDetail').textContent =
-            `Duração: ${formatDuration(result.duration)} · Tamanho: ${formatSize(result.size_bytes)}`;
+            `Duração: ${formatDuration(result.duration)} · Tamanho: ${formatSize(result.size_bytes)} · ${result.resolution}`;
+        document.getElementById('successFilename').textContent = result.filename;
 
         progressSection.style.display = 'none';
         downloadSection.style.display = '';
-
     } catch (err) {
         setProgress(0, '');
         progressSection.style.display = 'none';
@@ -518,7 +592,6 @@ function resetApp() {
     updateUI();
     downloadSection.style.display = 'none';
     progressSection.style.display = 'none';
-
     fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' });
     fetch('/api/sessions', { method: 'POST' })
         .then(r => r.json())
@@ -544,14 +617,9 @@ function formatTimePrecise(seconds) {
 }
 
 function parseTime(str) {
-    // Aceita "MM:SS.s" ou "SS.s" ou "SS"
     const parts = str.split(':');
-    if (parts.length === 2) {
-        return parseInt(parts[0]) * 60 + parseFloat(parts[1]);
-    }
-    if (parts.length === 3) {
-        return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseFloat(parts[2]);
-    }
+    if (parts.length === 2) return parseInt(parts[0]) * 60 + parseFloat(parts[1]);
+    if (parts.length === 3) return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseFloat(parts[2]);
     return parseFloat(str);
 }
 
@@ -563,13 +631,12 @@ function formatSize(bytes) {
     return (bytes / 1024).toFixed(1) + ' KB';
 }
 
-// Keyboard: ESC fecha clipes expandidos
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         clips.forEach(c => c.expanded = false);
         renderClipList();
+        closeProfileEditor();
     }
 });
 
-// === Start ===
 init();

@@ -16,6 +16,78 @@
             <p class="subtitle">Meli Clips — Suba os vídeos, escolha os trechos e monte na ordem</p>
         </header>
 
+        <!-- Profile Selector -->
+        <div class="profile-section" id="profileSection">
+            <div class="profile-bar">
+                <div class="profile-select-group">
+                    <label>Perfil</label>
+                    <select id="profileSelect" onchange="onProfileChange()">
+                        <option value="">Carregando...</option>
+                    </select>
+                </div>
+                <button class="profile-btn" onclick="openProfileEditor()" title="Editar perfil">Editar</button>
+                <button class="profile-btn" onclick="openProfileEditor(true)" title="Novo perfil">+ Novo</button>
+            </div>
+
+            <!-- Profile Editor (hidden by default) -->
+            <div class="profile-editor" id="profileEditor" style="display: none;">
+                <h3 id="profileEditorTitle">Editar Perfil</h3>
+                <div class="profile-fields">
+                    <div class="field">
+                        <label>Nome</label>
+                        <input type="text" id="profName" placeholder="Nome do perfil">
+                    </div>
+                    <div class="field">
+                        <label>Aspect Ratio</label>
+                        <select id="profAspect">
+                            <option value="9:16">9:16 (Vertical / Reels)</option>
+                            <option value="16:9">16:9 (Horizontal)</option>
+                            <option value="1:1">1:1 (Quadrado)</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>FPS</label>
+                        <select id="profFps">
+                            <option value="24">24</option>
+                            <option value="30">30</option>
+                            <option value="60">60</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Codec</label>
+                        <select id="profCodec">
+                            <option value="libx264">H.264 (compatível)</option>
+                            <option value="libx265">H.265 (menor)</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Transição</label>
+                        <select id="profTransition">
+                            <option value="cut">Corte seco</option>
+                            <option value="fade">Fade preto</option>
+                            <option value="dissolve">Dissolve (crossfade)</option>
+                            <option value="flash">Flash branco</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Duração transição (s)</label>
+                        <input type="number" id="profTransDuration" value="0.5" step="0.1" min="0.1" max="3">
+                    </div>
+                    <div class="field checkbox-field">
+                        <label>
+                            <input type="checkbox" id="profNormAudio" checked>
+                            Normalizar áudio
+                        </label>
+                    </div>
+                </div>
+                <div class="profile-editor-actions">
+                    <button class="btn-save" onclick="saveProfile()">Salvar Perfil</button>
+                    <button class="btn-delete" id="profDeleteBtn" onclick="deleteProfile()">Excluir</button>
+                    <button class="btn-cancel" onclick="closeProfileEditor()">Cancelar</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Stats Bar -->
         <div class="stats-bar" id="statsBar" style="display: none;">
             <div class="stat">
@@ -27,12 +99,12 @@
                 <span class="stat-label">Duração Final</span>
             </div>
             <div class="stat">
-                <span class="stat-value" id="statSize">0 MB</span>
-                <span class="stat-label">Tamanho Original</span>
+                <span class="stat-value" id="statAspect">-</span>
+                <span class="stat-label">Formato</span>
             </div>
             <div class="stat">
-                <span class="stat-value" id="statResolution">-</span>
-                <span class="stat-label">Resolução</span>
+                <span class="stat-value" id="statTransition">-</span>
+                <span class="stat-label">Transição</span>
             </div>
         </div>
 
@@ -46,38 +118,34 @@
             </div>
         </div>
 
+        <!-- Resolution Warnings -->
+        <div class="warnings" id="warnings" style="display: none;"></div>
+
         <!-- Clip List -->
         <div class="clips-section" id="clipsSection" style="display: none;">
             <div class="section-header">
                 <h2>Ordem dos Clipes</h2>
-                <span class="drag-hint">Arraste para reordenar — clique no clipe para cortar</span>
+                <span class="drag-hint">Arraste para reordenar — clique ✂ para cortar</span>
             </div>
             <div class="clip-list" id="clipList"></div>
         </div>
 
-        <!-- Settings -->
-        <div class="settings-section" id="settingsSection" style="display: none;">
-            <h2>Configurações de Saída</h2>
-            <div class="settings-grid">
-                <div class="setting">
-                    <label for="fpsSelect">FPS</label>
-                    <select id="fpsSelect">
-                        <option value="24">24</option>
-                        <option value="30" selected>30</option>
-                        <option value="60">60</option>
-                    </select>
-                </div>
-                <div class="setting">
-                    <label for="codecSelect">Codec</label>
-                    <select id="codecSelect">
-                        <option value="libx264">H.264 (compatível)</option>
-                        <option value="libx265">H.265 (menor)</option>
-                    </select>
-                </div>
-                <div class="setting">
-                    <label for="fileNameInput">Nome do arquivo</label>
-                    <input type="text" id="fileNameInput" value="video_montado.mp4">
-                </div>
+        <!-- Preview Timeline -->
+        <div class="preview-section" id="previewSection" style="display: none;">
+            <h2>Preview da Montagem</h2>
+            <div class="preview-timeline" id="previewTimeline"></div>
+        </div>
+
+        <!-- Webhook Toggle -->
+        <div class="webhook-section" id="webhookSection" style="display: none;">
+            <div class="webhook-toggle">
+                <label>
+                    <input type="checkbox" id="webhookEnabled" onchange="toggleWebhookUrl()">
+                    Enviar webhook após gerar
+                </label>
+            </div>
+            <div id="webhookUrlGroup" style="display: none;">
+                <input type="url" id="webhookUrl" placeholder="https://exemplo.com/webhook" class="webhook-input">
             </div>
         </div>
 
@@ -99,6 +167,7 @@
             <div class="success-icon">✅</div>
             <p class="success-text">Vídeo finalizado com sucesso!</p>
             <p class="success-detail" id="successDetail"></p>
+            <p class="success-filename" id="successFilename"></p>
             <a class="download-btn" id="downloadBtn" download>
                 ⬇️ Baixar Vídeo Pronto
             </a>
