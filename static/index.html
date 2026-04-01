@@ -238,16 +238,31 @@
             </div>
         </div>
 
-        <!-- Webhook Toggle -->
-        <div class="webhook-section" id="webhookSection" style="display: none;">
-            <div class="webhook-toggle">
-                <label>
-                    <input type="checkbox" id="webhookEnabled" onchange="toggleWebhookUrl()">
-                    Enviar webhook após gerar
-                </label>
+        <!-- Telegram Notification -->
+        <div class="telegram-section" id="telegramSection" style="display: none;">
+            <div class="section-header">
+                <h2>Notificacao no Telegram</h2>
+                <div class="sub-toggle">
+                    <label>
+                        <input type="checkbox" id="telegramEnabled" onchange="toggleTelegram()">
+                        Avisar quando terminar
+                    </label>
+                </div>
             </div>
-            <div id="webhookUrlGroup" style="display: none;">
-                <input type="url" id="webhookUrl" placeholder="https://exemplo.com/webhook" class="webhook-input">
+            <div id="telegramPanel" style="display: none;">
+                <div class="telegram-setup" id="telegramSetup">
+                    <p class="sub-hint">1. Fale com <strong>@BotFather</strong> no Telegram e crie um bot com <code>/newbot</code></p>
+                    <p class="sub-hint">2. Cole o token abaixo e mande qualquer mensagem para o seu bot</p>
+                    <p class="sub-hint">3. Clique "Conectar" para detectar seu chat</p>
+                    <div class="telegram-row">
+                        <input type="text" id="telegramToken" placeholder="Cole o token do bot aqui" class="webhook-input">
+                        <button class="sub-transcribe-btn" onclick="connectTelegram()">Conectar</button>
+                    </div>
+                </div>
+                <div class="telegram-connected" id="telegramConnected" style="display: none;">
+                    <span class="telegram-status">Conectado: <strong id="telegramChatName"></strong></span>
+                    <button class="trim-reset-btn" onclick="disconnectTelegram()">Desconectar</button>
+                </div>
             </div>
         </div>
 

@@ -19,7 +19,6 @@ const progressText = document.getElementById('progressText');
 const downloadSection = document.getElementById('downloadSection');
 const downloadBtn = document.getElementById('downloadBtn');
 const previewSection = document.getElementById('previewSection');
-const webhookSection = document.getElementById('webhookSection');
 
 // === Init ===
 async function init() {
@@ -346,7 +345,7 @@ function updateUI() {
     statsBar.style.display = hasClips ? '' : 'none';
     renderBtn.style.display = hasClips ? '' : 'none';
     previewSection.style.display = hasClips ? '' : 'none';
-    webhookSection.style.display = hasClips ? '' : 'none';
+    document.getElementById('telegramSection').style.display = hasClips ? '' : 'none';
     document.getElementById('subtitlesSection').style.display = hasClips ? '' : 'none';
 
     const prof = getCurrentProfile();
@@ -863,10 +862,56 @@ function getSubtitlesConfig() {
 
 function round3(n) { return Math.round(n * 1000) / 1000; }
 
-// === Webhook ===
-function toggleWebhookUrl() {
-    const enabled = document.getElementById('webhookEnabled').checked;
-    document.getElementById('webhookUrlGroup').style.display = enabled ? '' : 'none';
+// === Telegram ===
+let telegramChatId = null;
+let telegramToken = null;
+
+function toggleTelegram() {
+    const enabled = document.getElementById('telegramEnabled').checked;
+    document.getElementById('telegramPanel').style.display = enabled ? '' : 'none';
+}
+
+async function connectTelegram() {
+    const token = document.getElementById('telegramToken').value.trim();
+    if (!token) { alert('Cole o token do bot'); return; }
+
+    try {
+        const res = await fetch('/api/telegram/connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token }),
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            alert(err.detail || 'Erro ao conectar');
+            return;
+        }
+
+        const data = await res.json();
+        telegramToken = token;
+        telegramChatId = data.chat_id;
+
+        document.getElementById('telegramChatName').textContent = data.chat_name;
+        document.getElementById('telegramSetup').style.display = 'none';
+        document.getElementById('telegramConnected').style.display = 'flex';
+    } catch (err) {
+        alert('Erro de conexão: ' + err.message);
+    }
+}
+
+function disconnectTelegram() {
+    telegramToken = null;
+    telegramChatId = null;
+    document.getElementById('telegramSetup').style.display = '';
+    document.getElementById('telegramConnected').style.display = 'none';
+    document.getElementById('telegramToken').value = '';
+}
+
+function getTelegramConfig() {
+    if (!document.getElementById('telegramEnabled').checked) return undefined;
+    if (!telegramToken || !telegramChatId) return undefined;
+    return { token: telegramToken, chat_id: telegramChatId };
 }
 
 // === Render ===
@@ -879,9 +924,6 @@ async function renderVideo() {
     downloadSection.style.display = 'none';
 
     const prof = getCurrentProfile();
-    const webhookEnabled = document.getElementById('webhookEnabled').checked;
-    const webhookUrl = webhookEnabled ? document.getElementById('webhookUrl').value.trim() : null;
-
     setProgress(15, 'Preparando renderização...');
 
     try {
@@ -904,7 +946,7 @@ async function renderVideo() {
                     };
                 }),
                 profile: currentProfileSlug,
-                webhook_url: webhookUrl || undefined,
+                telegram: getTelegramConfig(),
                 subtitles: getSubtitlesConfig(),
             }),
         });

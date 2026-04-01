@@ -239,6 +239,71 @@ async def transcribe_clips(session_id: str, payload: dict):
     return {"words": all_words, "language": language}
 
 
+# ==================== TELEGRAM ====================
+
+@app.post("/api/telegram/connect")
+async def telegram_connect(payload: dict):
+    """Detecta o chat ID do bot Telegram usando getUpdates."""
+    token = payload.get("token", "").strip()
+    if not token:
+        raise HTTPException(400, "Token é obrigatório")
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            res = await client.get(f"https://api.telegram.org/bot{token}/getUpdates")
+            data = res.json()
+
+            if not data.get("ok"):
+                raise HTTPException(400, "Token inválido. Verifique e tente novamente.")
+
+            results = data.get("result", [])
+            if not results:
+                raise HTTPException(400, "Nenhuma mensagem encontrada. Mande qualquer mensagem para o bot primeiro!")
+
+            # Pega o chat mais recente
+            last = results[-1]
+            chat = last.get("message", {}).get("chat", {})
+            chat_id = chat.get("id")
+            chat_name = chat.get("first_name", "") or chat.get("title", "") or str(chat_id)
+
+            if not chat_id:
+                raise HTTPException(400, "Não foi possível detectar o chat. Mande uma mensagem para o bot e tente novamente.")
+
+            return {"chat_id": chat_id, "chat_name": chat_name}
+
+    except httpx.HTTPError:
+        raise HTTPException(500, "Erro ao conectar com o Telegram. Verifique sua conexão.")
+
+
+async def send_telegram_notification(token, chat_id, result):
+    """Envia notificação no Telegram quando o vídeo fica pronto."""
+    duration_min = int(result["duration"]) // 60
+    duration_sec = int(result["duration"]) % 60
+    size_mb = round(result["size_bytes"] / 1048576, 1)
+
+    text = (
+        f"✅ *Vídeo pronto!*\n\n"
+        f"📄 `{result['filename']}`\n"
+        f"⏱ Duração: {duration_min}:{duration_sec:02d}\n"
+        f"📐 Resolução: {result['resolution']}\n"
+        f"📦 Tamanho: {size_mb} MB\n"
+        f"🎬 Perfil: {result['profile']}"
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={
+                    "chat_id": chat_id,
+                    "text": text,
+                    "parse_mode": "Markdown",
+                },
+            )
+    except Exception:
+        pass  # Best-effort
+
+
 # ==================== PROFILES ====================
 
 @app.get("/api/profiles")
@@ -684,19 +749,12 @@ async def render_video(session_id: str, payload: dict):
             "profile": profile_name,
         }
 
-        webhook_url = payload.get("webhook_url")
-        if webhook_url:
-            try:
-                async with httpx.AsyncClient(timeout=10) as client:
-                    await client.post(webhook_url, json={
-                        "event": "video_rendered",
-                        **{k: v for k, v in result.items() if k != "download_url"},
-                        "timestamp": datetime.now().isoformat(),
-                        "clips_count": len(clip_entries),
-                        "has_subtitles": bool(subtitles_config and subtitles_config.get("enabled")),
-                    })
-            except Exception:
-                pass
+        # Telegram notification
+        telegram = payload.get("telegram")
+        if telegram and telegram.get("token") and telegram.get("chat_id"):
+            await send_telegram_notification(
+                telegram["token"], telegram["chat_id"], result
+            )
 
         return result
 
