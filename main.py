@@ -312,59 +312,85 @@ def create_subtitle_frame(
     if not words:
         return np.array(img)
 
-    # Mede o texto total
-    full_text = " ".join(words)
-    bbox = draw.textbbox((0, 0), full_text, font=font)
-    text_w = bbox[2] - bbox[0]
-    text_h = bbox[3] - bbox[1]
+    # Quebra o texto em linhas que cabem na largura do vídeo
+    pad_x = 20
+    max_width = w - pad_x * 2
+    lines = []
+    current_line_words = []
 
-    # Padding
-    pad_x, pad_y = 20, 10
+    for word in words:
+        test_line = " ".join(current_line_words + [word])
+        bbox = draw.textbbox((0, 0), test_line, font=font)
+        if bbox[2] - bbox[0] <= max_width or not current_line_words:
+            current_line_words.append(word)
+        else:
+            lines.append(current_line_words)
+            current_line_words = [word]
+    if current_line_words:
+        lines.append(current_line_words)
+
+    # Calcula altura total
+    line_bbox = draw.textbbox((0, 0), "Ay", font=font)
+    line_h = line_bbox[3] - line_bbox[1]
+    line_spacing = int(line_h * 0.3)
+    total_h = len(lines) * line_h + (len(lines) - 1) * line_spacing
+
+    pad_y = 10
 
     # Posição Y
     if position == "top":
-        y = int(h * 0.08)
+        y_start = int(h * 0.06)
     elif position == "center":
-        y = (h - text_h) // 2
+        y_start = (h - total_h) // 2
     else:
-        y = int(h * 0.82)
+        y_start = int(h * 0.85) - total_h
 
-    x_start = (w - text_w) // 2
-
-    # Fundo semi-transparente
+    # Fundo semi-transparente (cobre todas as linhas)
     if bg_color:
+        # Largura máxima entre as linhas
+        max_line_w = 0
+        for line_words in lines:
+            lt = " ".join(line_words)
+            lb = draw.textbbox((0, 0), lt, font=font)
+            max_line_w = max(max_line_w, lb[2] - lb[0])
+
+        bg_x = (w - max_line_w) // 2
         bg_rect = [
-            x_start - pad_x,
-            y - pad_y,
-            x_start + text_w + pad_x,
-            y + text_h + pad_y,
+            bg_x - pad_x,
+            y_start - pad_y,
+            bg_x + max_line_w + pad_x,
+            y_start + total_h + pad_y,
         ]
         bg_r, bg_g, bg_b = _hex_to_rgb(bg_color)
         draw.rounded_rectangle(bg_rect, radius=8, fill=(bg_r, bg_g, bg_b, 180))
 
-    # Desenha palavra por palavra
-    current_x = x_start
-    for word in words:
-        is_highlighted = (word == highlight_word)
-        word_color = highlight_color if is_highlighted else color
+    # Desenha cada linha
+    current_y = y_start
+    for line_words in lines:
+        line_text = " ".join(line_words)
+        lb = draw.textbbox((0, 0), line_text, font=font)
+        line_w = lb[2] - lb[0]
+        current_x = (w - line_w) // 2
 
-        # Outline preto para legibilidade
-        if outline:
-            outline_color = "#000000"
-            for dx in [-2, -1, 0, 1, 2]:
-                for dy in [-2, -1, 0, 1, 2]:
-                    if dx != 0 or dy != 0:
-                        draw.text(
-                            (current_x + dx, y + dy),
-                            word,
-                            font=font,
-                            fill=outline_color,
-                        )
+        for word in line_words:
+            is_highlighted = (word == highlight_word)
+            word_color = highlight_color if is_highlighted else color
 
-        draw.text((current_x, y), word, font=font, fill=word_color)
+            if outline:
+                for dx in [-2, -1, 0, 1, 2]:
+                    for dy in [-2, -1, 0, 1, 2]:
+                        if dx != 0 or dy != 0:
+                            draw.text(
+                                (current_x + dx, current_y + dy),
+                                word, font=font, fill="#000000",
+                            )
 
-        word_bbox = draw.textbbox((0, 0), word + " ", font=font)
-        current_x += word_bbox[2] - word_bbox[0]
+            draw.text((current_x, current_y), word, font=font, fill=word_color)
+
+            word_bbox = draw.textbbox((0, 0), word + " ", font=font)
+            current_x += word_bbox[2] - word_bbox[0]
+
+        current_y += line_h + line_spacing
 
     return np.array(img)
 
