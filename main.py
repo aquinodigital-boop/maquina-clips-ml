@@ -1,8 +1,16 @@
 import os
+import sys
 import uuid
 import shutil
 import tempfile
 from pathlib import Path
+
+# Workaround: moviepy importa dotenv que pode falhar no Windows
+# com "ValueError: embedded null character". Garantimos que existe
+# um .env válido antes do import.
+_env_path = Path(__file__).parent / ".env"
+if not _env_path.exists():
+    _env_path.touch()
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
