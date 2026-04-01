@@ -254,6 +254,7 @@ async def create_or_update_profile(payload: dict):
         "aspect_ratio": payload.get("aspect_ratio", "1:1"),
         "fps": payload.get("fps", 30),
         "codec": payload.get("codec", "libx264"),
+        "fit_mode": payload.get("fit_mode", "letterbox"),
         "transition": payload.get("transition", "cut"),
         "transition_duration": payload.get("transition_duration", 0.5),
         "normalize_audio": payload.get("normalize_audio", True),
@@ -440,7 +441,17 @@ def parse_aspect_ratio(ar_str):
     return int(parts[0]), int(parts[1])
 
 
-def normalize_clip_resolution(clip, target_w, target_h):
+def normalize_clip_resolution(clip, target_w, target_h, fit_mode="letterbox", crop_anchor="center"):
+    """Ajusta o clipe para a resolução alvo.
+
+    fit_mode:
+        - "letterbox": redimensiona mantendo proporção + barras pretas
+        - "crop": redimensiona para preencher + recorta o excesso
+        - "stretch": estica para preencher (distorce)
+    crop_anchor: onde ancorar o crop ("top", "center", "bottom",
+                 "left", "right", "top-left", "top-right",
+                 "bottom-left", "bottom-right")
+    """
     cw, ch = clip.size
     target_ratio = target_w / target_h
     clip_ratio = cw / ch
@@ -448,6 +459,44 @@ def normalize_clip_resolution(clip, target_w, target_h):
     if abs(clip_ratio - target_ratio) < 0.01 and cw == target_w and ch == target_h:
         return clip
 
+    if fit_mode == "stretch":
+        return clip.resized((target_w, target_h))
+
+    if fit_mode == "crop":
+        # Redimensiona para cobrir todo o frame (sem barras)
+        if clip_ratio > target_ratio:
+            # Clipe mais largo → escala pela altura, corta laterais
+            new_h = target_h
+            new_w = int(target_h * clip_ratio)
+        else:
+            # Clipe mais alto → escala pela largura, corta em cima/baixo
+            new_w = target_w
+            new_h = int(target_w / clip_ratio)
+
+        new_w = new_w + (new_w % 2)
+        new_h = new_h + (new_h % 2)
+        resized = clip.resized((new_w, new_h))
+
+        # Calcula posição de recorte baseada no anchor
+        anchor = crop_anchor.lower()
+        if "left" in anchor:
+            x1 = 0
+        elif "right" in anchor:
+            x1 = new_w - target_w
+        else:
+            x1 = (new_w - target_w) // 2
+
+        if "top" in anchor:
+            y1 = 0
+        elif "bottom" in anchor:
+            y1 = new_h - target_h
+        else:
+            y1 = (new_h - target_h) // 2
+
+        cropped = resized.cropped(x1=x1, y1=y1, x2=x1 + target_w, y2=y1 + target_h)
+        return cropped
+
+    # fit_mode == "letterbox" (padrão)
     if clip_ratio > target_ratio:
         new_w = target_w
         new_h = int(target_w / clip_ratio)
@@ -566,7 +615,11 @@ async def render_video(session_id: str, payload: dict):
     # Subtitles config
     subtitles_config = payload.get("subtitles")
 
+    # Fit mode default
+    default_fit_mode = payload.get("fit_mode") or profile.get("fit_mode", "letterbox")
+
     raw_clips = []
+    clip_fit_modes = []
     try:
         for entry in clip_entries:
             stored_name = entry["stored_name"]
@@ -583,8 +636,21 @@ async def render_video(session_id: str, payload: dict):
                 clip = clip.subclipped(trim_start, end)
             raw_clips.append(clip)
 
+            # Cada clipe pode ter seu próprio fit_mode e crop_anchor
+            clip_fit_modes.append({
+                "fit_mode": entry.get("fit_mode", default_fit_mode),
+                "crop_anchor": entry.get("crop_anchor", "center"),
+            })
+
         target_w, target_h = get_target_resolution(aspect_ratio, raw_clips)
-        normalized_clips = [normalize_clip_resolution(c, target_w, target_h) for c in raw_clips]
+        normalized_clips = [
+            normalize_clip_resolution(
+                c, target_w, target_h,
+                fit_mode=clip_fit_modes[i]["fit_mode"],
+                crop_anchor=clip_fit_modes[i]["crop_anchor"],
+            )
+            for i, c in enumerate(raw_clips)
+        ]
 
         final = apply_transition(normalized_clips, transition, transition_duration)
 

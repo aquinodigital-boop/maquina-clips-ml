@@ -74,6 +74,7 @@ function openProfileEditor(isNew) {
         document.getElementById('profAspect').value = '1:1';
         document.getElementById('profFps').value = '30';
         document.getElementById('profCodec').value = 'libx264';
+        document.getElementById('profFitMode').value = 'letterbox';
         document.getElementById('profTransition').value = 'cut';
         document.getElementById('profTransDuration').value = '0.5';
         document.getElementById('profNormAudio').checked = true;
@@ -86,6 +87,7 @@ function openProfileEditor(isNew) {
         document.getElementById('profAspect').value = prof.aspect_ratio || '1:1';
         document.getElementById('profFps').value = String(prof.fps || 30);
         document.getElementById('profCodec').value = prof.codec || 'libx264';
+        document.getElementById('profFitMode').value = prof.fit_mode || 'letterbox';
         document.getElementById('profTransition').value = prof.transition || 'cut';
         document.getElementById('profTransDuration').value = String(prof.transition_duration || 0.5);
         document.getElementById('profNormAudio').checked = prof.normalize_audio !== false;
@@ -108,6 +110,7 @@ async function saveProfile() {
         aspect_ratio: document.getElementById('profAspect').value,
         fps: parseInt(document.getElementById('profFps').value),
         codec: document.getElementById('profCodec').value,
+        fit_mode: document.getElementById('profFitMode').value,
         transition: document.getElementById('profTransition').value,
         transition_duration: parseFloat(document.getElementById('profTransDuration').value),
         normalize_audio: document.getElementById('profNormAudio').checked,
@@ -179,6 +182,7 @@ async function uploadFile(file) {
         clip_id: tempId, filename: file.name, stored_name: null,
         duration: 0, width: 0, height: 0, fps: 0, size_bytes: file.size,
         trim_start: 0, trim_end: 0, uploading: true, expanded: false,
+        fit_mode: 'default', crop_anchor: 'center',
     });
     renderClipList();
     updateUI();
@@ -196,6 +200,7 @@ async function uploadFile(file) {
             clips[idx] = {
                 ...info, trim_start: 0, trim_end: info.duration,
                 uploading: false, expanded: false,
+                fit_mode: 'default', crop_anchor: 'center',
             };
         }
     } catch (err) {
@@ -291,7 +296,31 @@ function renderClipList() {
                     <button class="trim-play-btn" onclick="playTrimmed('${clip.clip_id}')">▶ Preview</button>
                     <button class="trim-reset-btn" onclick="resetTrim('${clip.clip_id}')">Resetar</button>
                 </div>
-            </div>` : ''}
+                ${resMismatch ? `
+                <div class="crop-controls">
+                    <div class="crop-group">
+                        <label>Ajuste de proporção</label>
+                        <select id="fitmode-${clip.clip_id}" onchange="onFitModeChange('${clip.clip_id}', this.value)">
+                            <option value="default" ${clip.fit_mode === 'default' ? 'selected' : ''}>Padrão do perfil</option>
+                            <option value="letterbox" ${clip.fit_mode === 'letterbox' ? 'selected' : ''}>Letterbox (barras pretas)</option>
+                            <option value="crop" ${clip.fit_mode === 'crop' ? 'selected' : ''}>Crop (recortar para preencher)</option>
+                            <option value="stretch" ${clip.fit_mode === 'stretch' ? 'selected' : ''}>Esticar (distorce)</option>
+                        </select>
+                    </div>
+                    <div class="crop-group" id="anchor-group-${clip.clip_id}" style="display: ${clip.fit_mode === 'crop' ? '' : 'none'}">
+                        <label>Ancoragem do recorte</label>
+                        <div class="crop-anchor-grid" id="anchor-grid-${clip.clip_id}">
+                            ${['top-left','top','top-right','left','center','right','bottom-left','bottom','bottom-right'].map(pos =>
+                                `<button class="anchor-btn ${clip.crop_anchor === pos ? 'active' : ''}"
+                                    onclick="onCropAnchorChange('${clip.clip_id}', '${pos}')"
+                                    title="${pos}">
+                                    <span class="anchor-dot"></span>
+                                </button>`
+                            ).join('')}
+                        </div>
+                    </div>
+                </div>
+                ` : ''}` : ''}
         `;
         clipList.appendChild(el);
 
@@ -515,6 +544,29 @@ function resetTrim(clipId) {
     updateUI();
 }
 
+// === Crop controls ===
+function onFitModeChange(clipId, value) {
+    const clip = clips.find(c => c.clip_id === clipId);
+    if (!clip) return;
+    clip.fit_mode = value;
+    const anchorGroup = document.getElementById(`anchor-group-${clipId}`);
+    if (anchorGroup) anchorGroup.style.display = value === 'crop' ? '' : 'none';
+}
+
+function onCropAnchorChange(clipId, anchor) {
+    const clip = clips.find(c => c.clip_id === clipId);
+    if (!clip) return;
+    clip.crop_anchor = anchor;
+    // Update active state visually
+    const grid = document.getElementById(`anchor-grid-${clipId}`);
+    if (grid) {
+        grid.querySelectorAll('.anchor-btn').forEach((btn, i) => {
+            const positions = ['top-left','top','top-right','left','center','right','bottom-left','bottom','bottom-right'];
+            btn.classList.toggle('active', positions[i] === anchor);
+        });
+    }
+}
+
 // === Actions ===
 async function removeClip(clipId, storedName) {
     clips = clips.filter(c => c.clip_id !== clipId);
@@ -662,6 +714,8 @@ async function renderVideo() {
                     stored_name: c.stored_name,
                     trim_start: c.trim_start,
                     trim_end: c.trim_end,
+                    fit_mode: c.fit_mode !== 'default' ? c.fit_mode : undefined,
+                    crop_anchor: c.crop_anchor !== 'center' ? c.crop_anchor : undefined,
                 })),
                 profile: currentProfileSlug,
                 webhook_url: webhookUrl || undefined,

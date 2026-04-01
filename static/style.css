@@ -410,6 +410,76 @@ body {
 
 .trim-reset-btn:hover { color: var(--text); border-color: var(--text-dim); }
 
+/* === Crop Controls === */
+.crop-controls {
+    display: flex;
+    gap: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    margin-top: 1rem;
+    align-items: flex-start;
+}
+
+.crop-group label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-bottom: 0.4rem;
+}
+
+.crop-group select {
+    background: var(--bg-card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+    outline: none;
+}
+
+.crop-group select:focus { border-color: var(--accent); }
+
+.crop-anchor-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3px;
+    width: 90px;
+}
+
+.anchor-btn {
+    width: 28px;
+    height: 28px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    padding: 0;
+}
+
+.anchor-btn:hover {
+    border-color: var(--text-dim);
+}
+
+.anchor-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.anchor-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--text-dim);
+    border-radius: 50%;
+}
+
+.anchor-btn.active .anchor-dot {
+    background: white;
+}
+
 /* === Preview Timeline === */
 .preview-section {
     margin-bottom: 1.5rem;
