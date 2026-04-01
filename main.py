@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from moviepy import (
     VideoFileClip,
+    VideoClip,
     AudioFileClip,
     ImageClip,
     ColorClip,
@@ -373,65 +374,53 @@ def _hex_to_rgb(hex_color):
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 
-def build_subtitle_clips(words, video_duration, video_size, style):
-    """Cria clips de legenda a partir das palavras transcritas."""
+def build_subtitle_clip(words, video_duration, video_size, style):
+    """Cria UM ÚNICO clip de legenda eficiente usando make_frame."""
     if not words:
-        return []
+        return None
 
     sub_style = style.get("subtitle_style", "word_by_word")
-    clips = []
+    group_size = style.get("words_per_group", 5 if sub_style == "highlight" else 8)
 
+    # Pré-computa os grupos de palavras e seus intervalos
     if sub_style == "word_by_word":
-        # Uma palavra grande por vez
-        for w in words:
-            frame = create_subtitle_frame(
-                w["word"], w["word"], video_size, style
-            )
-            clip = (
-                ImageClip(frame, transparent=True)
-                .with_duration(w["end"] - w["start"])
-                .with_start(w["start"])
-            )
-            clips.append(clip)
-
+        segments = [{"text": w["word"], "highlight": w["word"],
+                     "start": w["start"], "end": w["end"]} for w in words]
     elif sub_style == "highlight":
-        # Agrupa em frases de ~5 palavras, destaca a atual
-        group_size = style.get("words_per_group", 5)
+        segments = []
         for i in range(0, len(words), group_size):
             group = words[i:i + group_size]
             phrase = " ".join(gw["word"] for gw in group)
-            group_start = group[0]["start"]
-            group_end = group[-1]["end"]
-
             for gw in group:
-                frame = create_subtitle_frame(
-                    phrase, gw["word"], video_size, style
-                )
-                clip = (
-                    ImageClip(frame, transparent=True)
-                    .with_duration(gw["end"] - gw["start"])
-                    .with_start(gw["start"])
-                )
-                clips.append(clip)
-
-    elif sub_style == "classic":
-        # Legendas clássicas em blocos de ~8 palavras
-        group_size = style.get("words_per_group", 8)
+                segments.append({"text": phrase, "highlight": gw["word"],
+                                 "start": gw["start"], "end": gw["end"]})
+    else:  # classic
+        segments = []
         for i in range(0, len(words), group_size):
             group = words[i:i + group_size]
             phrase = " ".join(gw["word"] for gw in group)
-            group_start = group[0]["start"]
-            group_end = group[-1]["end"]
+            segments.append({"text": phrase, "highlight": None,
+                             "start": group[0]["start"], "end": group[-1]["end"]})
 
-            frame = create_subtitle_frame(phrase, None, video_size, style)
-            clip = (
-                ImageClip(frame, transparent=True)
-                .with_duration(group_end - group_start)
-                .with_start(group_start)
-            )
-            clips.append(clip)
+    # Cache de frames renderizados
+    frame_cache = {}
+    transparent_frame = np.zeros((video_size[1], video_size[0], 4), dtype=np.uint8)
 
-    return clips
+    def make_subtitle_frame(t):
+        # Encontra o segmento ativo no tempo t
+        for idx, seg in enumerate(segments):
+            if seg["start"] <= t < seg["end"]:
+                cache_key = (idx, seg["text"], seg["highlight"])
+                if cache_key not in frame_cache:
+                    frame_cache[cache_key] = create_subtitle_frame(
+                        seg["text"], seg["highlight"], video_size, style
+                    )
+                return frame_cache[cache_key]
+        return transparent_frame
+
+    sub_clip = VideoClip(make_subtitle_frame, duration=video_duration)
+    sub_clip = sub_clip.with_position((0, 0))
+    return sub_clip
 
 
 # ==================== RENDER ====================
@@ -616,21 +605,18 @@ async def render_video(session_id: str, payload: dict):
             style = subtitles_config.get("style", {})
 
             if words:
-                sub_clips = build_subtitle_clips(
+                sub_clip = build_subtitle_clip(
                     words, final.duration, (target_w, target_h), style
                 )
-                if sub_clips:
+                if sub_clip:
+                    original_audio = final.audio
                     final = CompositeVideoClip(
-                        [final] + sub_clips,
+                        [final, sub_clip],
                         size=(target_w, target_h),
                     )
-                    if raw_clips[0].audio is not None or any(c.audio for c in raw_clips):
-                        # Preserva o áudio do vídeo concatenado
-                        concat_audio = apply_transition(
-                            normalized_clips, transition, transition_duration
-                        ).audio
-                        if concat_audio:
-                            final = final.with_audio(concat_audio)
+                    # Preserva o áudio original (CompositeVideoClip pode perdê-lo)
+                    if original_audio is not None:
+                        final = final.with_audio(original_audio)
 
         output_name = generate_output_name(profile_name, session_dir)
         output_path = session_dir / output_name
