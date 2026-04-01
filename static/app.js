@@ -555,9 +555,41 @@ function resetTrim(clipId) {
 }
 
 // === Visual Crop Editor ===
+function getVideoContentRect(clipId) {
+    // Calcula a área real do conteúdo do vídeo dentro do elemento <video>
+    // (descontando as barras pretas que o browser adiciona)
+    const video = document.getElementById(`video-${clipId}`);
+    const overlay = document.getElementById(`crop-overlay-${clipId}`);
+    if (!video || !overlay) return null;
+
+    const elemW = overlay.offsetWidth;
+    const elemH = overlay.offsetHeight;
+    if (elemW === 0 || elemH === 0) return null;
+
+    const natW = video.videoWidth || 1;
+    const natH = video.videoHeight || 1;
+    const elemRatio = elemW / elemH;
+    const videoRatio = natW / natH;
+
+    let vx, vy, vw, vh;
+    if (videoRatio > elemRatio) {
+        // Vídeo mais largo que o container → barras em cima/baixo
+        vw = elemW;
+        vh = elemW / videoRatio;
+        vx = 0;
+        vy = (elemH - vh) / 2;
+    } else {
+        // Vídeo mais alto que o container → barras nos lados
+        vh = elemH;
+        vw = elemH * videoRatio;
+        vx = (elemW - vw) / 2;
+        vy = 0;
+    }
+
+    return { vx, vy, vw, vh };
+}
+
 function initCropOverlay(clipId) {
-    const clip = clips.find(c => c.clip_id === clipId);
-    if (!clip) return;
     updateCropOverlay(clipId);
 }
 
@@ -565,25 +597,29 @@ function updateCropOverlay(clipId) {
     const clip = clips.find(c => c.clip_id === clipId);
     if (!clip) return;
 
+    const vr = getVideoContentRect(clipId);
+    if (!vr) return;
+    const { vx, vy, vw, vh } = vr;
+
     const overlay = document.getElementById(`crop-overlay-${clipId}`);
     const box = document.getElementById(`crop-box-${clipId}`);
     if (!overlay || !box) return;
 
     const ow = overlay.offsetWidth;
     const oh = overlay.offsetHeight;
-    if (ow === 0 || oh === 0) return;
 
-    const bx = clip.crop_x * ow;
-    const by = clip.crop_y * oh;
-    const bw = clip.crop_w * ow;
-    const bh = clip.crop_h * oh;
+    // Posição do crop box relativa ao container (mapeada para a área do vídeo)
+    const bx = vx + clip.crop_x * vw;
+    const by = vy + clip.crop_y * vh;
+    const bw = clip.crop_w * vw;
+    const bh = clip.crop_h * vh;
 
     box.style.left = bx + 'px';
     box.style.top = by + 'px';
     box.style.width = bw + 'px';
     box.style.height = bh + 'px';
 
-    // Dim areas
+    // Dim areas (cobre tudo fora do crop box)
     const dimTop = overlay.querySelector('.crop-dim-top');
     const dimBottom = overlay.querySelector('.crop-dim-bottom');
     const dimLeft = overlay.querySelector('.crop-dim-left');
@@ -620,8 +656,10 @@ function startCropDrag(e, clipId, mode) {
     const clip = clips.find(c => c.clip_id === clipId);
     if (!clip) return;
 
-    const overlay = document.getElementById(`crop-overlay-${clipId}`);
-    const rect = overlay.getBoundingClientRect();
+    const vr = getVideoContentRect(clipId);
+    if (!vr) return;
+    const { vx, vy, vw, vh } = vr;
+
     const startMouse = { x: e.clientX, y: e.clientY };
     const startCrop = {
         x: clip.crop_x, y: clip.crop_y,
@@ -629,8 +667,9 @@ function startCropDrag(e, clipId, mode) {
     };
 
     function onMove(ev) {
-        const dx = (ev.clientX - startMouse.x) / rect.width;
-        const dy = (ev.clientY - startMouse.y) / rect.height;
+        // Delta em fração da área do vídeo (não do container)
+        const dx = (ev.clientX - startMouse.x) / vw;
+        const dy = (ev.clientY - startMouse.y) / vh;
 
         let nx = startCrop.x, ny = startCrop.y;
         let nw = startCrop.w, nh = startCrop.h;
@@ -639,14 +678,12 @@ function startCropDrag(e, clipId, mode) {
             nx = startCrop.x + dx;
             ny = startCrop.y + dy;
         } else {
-            // Resize handles
             if (mode.includes('w')) { nx = startCrop.x + dx; nw = startCrop.w - dx; }
             if (mode.includes('e')) { nw = startCrop.w + dx; }
             if (mode.includes('n')) { ny = startCrop.y + dy; nh = startCrop.h - dy; }
             if (mode.includes('s')) { nh = startCrop.h + dy; }
         }
 
-        // Clamp: mínimo 5%, mantém dentro dos limites
         nw = Math.max(0.05, nw);
         nh = Math.max(0.05, nh);
         nx = Math.max(0, Math.min(nx, 1 - nw));
