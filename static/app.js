@@ -183,6 +183,7 @@ async function uploadFile(file) {
         duration: 0, width: 0, height: 0, fps: 0, size_bytes: file.size,
         trim_start: 0, trim_end: 0, uploading: true, expanded: false,
         fit_mode: 'default', crop_anchor: 'center',
+        crop_x: 0, crop_y: 0, crop_w: 1, crop_h: 1, // 0-1 percentuais
     });
     renderClipList();
     updateUI();
@@ -201,6 +202,7 @@ async function uploadFile(file) {
                 ...info, trim_start: 0, trim_end: info.duration,
                 uploading: false, expanded: false,
                 fit_mode: 'default', crop_anchor: 'center',
+                crop_x: 0, crop_y: 0, crop_w: 1, crop_h: 1,
             };
         }
     } catch (err) {
@@ -237,13 +239,15 @@ function renderClipList() {
             + (resMismatch ? ' resolution-mismatch' : '');
         el.dataset.id = clip.clip_id;
 
+        const hasCrop = !clip.uploading && (clip.crop_x > 0.01 || clip.crop_y > 0.01 || clip.crop_w < 0.99 || clip.crop_h < 0.99);
+
         let metaText = '';
         if (clip.uploading) {
             metaText = 'Enviando...';
         } else {
             metaText = `${formatDuration(trimmedDuration)} · ${clip.width}x${clip.height} · ${clip.fps}fps`;
             if (isTrimmed) metaText += ' <span class="trim-badge">CORTADO</span>';
-            if (resMismatch) metaText += ` <span class="res-warn">⚠ ${clip.width}x${clip.height} → ${targetAR}</span>`;
+            if (hasCrop) metaText += ' <span class="trim-badge">RECORTADO</span>';
         }
 
         el.innerHTML = `
@@ -263,9 +267,38 @@ function renderClipList() {
             </div>
             ${!clip.uploading ? `
             <div class="trim-editor">
-                <video class="trim-preview" id="video-${clip.clip_id}"
-                    src="/api/sessions/${sessionId}/clips/${clip.stored_name}/preview"
-                    preload="metadata"></video>
+                <div class="video-crop-container" id="crop-container-${clip.clip_id}">
+                    <video class="trim-preview" id="video-${clip.clip_id}"
+                        src="/api/sessions/${sessionId}/clips/${clip.stored_name}/preview"
+                        preload="metadata"
+                        onloadedmetadata="initCropOverlay('${clip.clip_id}')"></video>
+                    <div class="crop-overlay" id="crop-overlay-${clip.clip_id}">
+                        <div class="crop-dim crop-dim-top"></div>
+                        <div class="crop-dim crop-dim-bottom"></div>
+                        <div class="crop-dim crop-dim-left"></div>
+                        <div class="crop-dim crop-dim-right"></div>
+                        <div class="crop-box" id="crop-box-${clip.clip_id}"
+                            onmousedown="startCropDrag(event, '${clip.clip_id}', 'move')">
+                            <div class="crop-handle crop-handle-nw" onmousedown="startCropDrag(event, '${clip.clip_id}', 'nw')"></div>
+                            <div class="crop-handle crop-handle-n" onmousedown="startCropDrag(event, '${clip.clip_id}', 'n')"></div>
+                            <div class="crop-handle crop-handle-ne" onmousedown="startCropDrag(event, '${clip.clip_id}', 'ne')"></div>
+                            <div class="crop-handle crop-handle-w" onmousedown="startCropDrag(event, '${clip.clip_id}', 'w')"></div>
+                            <div class="crop-handle crop-handle-e" onmousedown="startCropDrag(event, '${clip.clip_id}', 'e')"></div>
+                            <div class="crop-handle crop-handle-sw" onmousedown="startCropDrag(event, '${clip.clip_id}', 'sw')"></div>
+                            <div class="crop-handle crop-handle-s" onmousedown="startCropDrag(event, '${clip.clip_id}', 's')"></div>
+                            <div class="crop-handle crop-handle-se" onmousedown="startCropDrag(event, '${clip.clip_id}', 'se')"></div>
+                            <div class="crop-info" id="crop-info-${clip.clip_id}"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="crop-toolbar">
+                    <button class="crop-preset-btn" onclick="setCropPreset('${clip.clip_id}', 'full')">100%</button>
+                    <button class="crop-preset-btn" onclick="setCropPreset('${clip.clip_id}', 'center-50')">Centro 50%</button>
+                    <button class="crop-preset-btn" onclick="setCropPreset('${clip.clip_id}', 'ar-profile')">Ajustar ${targetAR}</button>
+                    <span class="crop-size-label" id="crop-size-${clip.clip_id}"></span>
+                </div>
+
                 <div class="trim-range-container">
                     <div class="trim-range-track" id="track-${clip.clip_id}"
                         onmousedown="onTrackClick(event, '${clip.clip_id}')">
@@ -294,31 +327,7 @@ function renderClipList() {
                         Trecho: ${formatDuration(trimmedDuration)}
                     </div>
                     <button class="trim-play-btn" onclick="playTrimmed('${clip.clip_id}')">▶ Preview</button>
-                    <button class="trim-reset-btn" onclick="resetTrim('${clip.clip_id}')">Resetar</button>
-                </div>
-                <div class="crop-controls">
-                    <div class="crop-group">
-                        <label>Enquadramento</label>
-                        <select id="fitmode-${clip.clip_id}" onchange="onFitModeChange('${clip.clip_id}', this.value)">
-                            <option value="default" ${clip.fit_mode === 'default' ? 'selected' : ''}>Padrão do perfil</option>
-                            <option value="letterbox" ${clip.fit_mode === 'letterbox' ? 'selected' : ''}>Letterbox (barras pretas)</option>
-                            <option value="crop" ${clip.fit_mode === 'crop' ? 'selected' : ''}>Crop (recortar para preencher)</option>
-                            <option value="stretch" ${clip.fit_mode === 'stretch' ? 'selected' : ''}>Esticar (distorce)</option>
-                        </select>
-                    </div>
-                    <div class="crop-group" id="anchor-group-${clip.clip_id}" style="display: ${clip.fit_mode === 'crop' ? '' : 'none'}">
-                        <label>Ponto de recorte</label>
-                        <div class="crop-anchor-grid" id="anchor-grid-${clip.clip_id}">
-                            ${['top-left','top','top-right','left','center','right','bottom-left','bottom','bottom-right'].map(pos =>
-                                `<button class="anchor-btn ${clip.crop_anchor === pos ? 'active' : ''}"
-                                    onclick="onCropAnchorChange('${clip.clip_id}', '${pos}')"
-                                    title="${pos}">
-                                    <span class="anchor-dot"></span>
-                                </button>`
-                            ).join('')}
-                        </div>
-                    </div>
-                    ${resMismatch ? `<div class="crop-warning">⚠ ${clip.width}x${clip.height} → ${targetAR}</div>` : ''}
+                    <button class="trim-reset-btn" onclick="resetTrim('${clip.clip_id}')">Resetar tudo</button>
                 </div>` : ''}
         `;
         clipList.appendChild(el);
@@ -539,32 +548,168 @@ function resetTrim(clipId) {
     if (!clip) return;
     clip.trim_start = 0;
     clip.trim_end = clip.duration;
+    clip.crop_x = 0; clip.crop_y = 0;
+    clip.crop_w = 1; clip.crop_h = 1;
     renderClipList();
     updateUI();
 }
 
-// === Crop controls ===
-function onFitModeChange(clipId, value) {
+// === Visual Crop Editor ===
+function initCropOverlay(clipId) {
     const clip = clips.find(c => c.clip_id === clipId);
     if (!clip) return;
-    clip.fit_mode = value;
-    const anchorGroup = document.getElementById(`anchor-group-${clipId}`);
-    if (anchorGroup) anchorGroup.style.display = value === 'crop' ? '' : 'none';
+    updateCropOverlay(clipId);
 }
 
-function onCropAnchorChange(clipId, anchor) {
+function updateCropOverlay(clipId) {
     const clip = clips.find(c => c.clip_id === clipId);
     if (!clip) return;
-    clip.crop_anchor = anchor;
-    // Update active state visually
-    const grid = document.getElementById(`anchor-grid-${clipId}`);
-    if (grid) {
-        grid.querySelectorAll('.anchor-btn').forEach((btn, i) => {
-            const positions = ['top-left','top','top-right','left','center','right','bottom-left','bottom','bottom-right'];
-            btn.classList.toggle('active', positions[i] === anchor);
-        });
+
+    const overlay = document.getElementById(`crop-overlay-${clipId}`);
+    const box = document.getElementById(`crop-box-${clipId}`);
+    if (!overlay || !box) return;
+
+    const ow = overlay.offsetWidth;
+    const oh = overlay.offsetHeight;
+    if (ow === 0 || oh === 0) return;
+
+    const bx = clip.crop_x * ow;
+    const by = clip.crop_y * oh;
+    const bw = clip.crop_w * ow;
+    const bh = clip.crop_h * oh;
+
+    box.style.left = bx + 'px';
+    box.style.top = by + 'px';
+    box.style.width = bw + 'px';
+    box.style.height = bh + 'px';
+
+    // Dim areas
+    const dimTop = overlay.querySelector('.crop-dim-top');
+    const dimBottom = overlay.querySelector('.crop-dim-bottom');
+    const dimLeft = overlay.querySelector('.crop-dim-left');
+    const dimRight = overlay.querySelector('.crop-dim-right');
+
+    dimTop.style.height = by + 'px';
+    dimBottom.style.top = (by + bh) + 'px';
+    dimBottom.style.height = (oh - by - bh) + 'px';
+    dimLeft.style.top = by + 'px';
+    dimLeft.style.height = bh + 'px';
+    dimLeft.style.width = bx + 'px';
+    dimRight.style.top = by + 'px';
+    dimRight.style.height = bh + 'px';
+    dimRight.style.left = (bx + bw) + 'px';
+    dimRight.style.width = (ow - bx - bw) + 'px';
+
+    // Info label
+    const cropPixW = Math.round(clip.crop_w * clip.width);
+    const cropPixH = Math.round(clip.crop_h * clip.height);
+    const infoEl = document.getElementById(`crop-info-${clipId}`);
+    if (infoEl) infoEl.textContent = `${cropPixW}x${cropPixH}`;
+
+    const sizeEl = document.getElementById(`crop-size-${clipId}`);
+    if (sizeEl) {
+        const pct = Math.round(clip.crop_w * clip.crop_h * 100);
+        sizeEl.textContent = `Recorte: ${cropPixW}x${cropPixH} (${pct}%)`;
     }
 }
+
+function startCropDrag(e, clipId, mode) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const clip = clips.find(c => c.clip_id === clipId);
+    if (!clip) return;
+
+    const overlay = document.getElementById(`crop-overlay-${clipId}`);
+    const rect = overlay.getBoundingClientRect();
+    const startMouse = { x: e.clientX, y: e.clientY };
+    const startCrop = {
+        x: clip.crop_x, y: clip.crop_y,
+        w: clip.crop_w, h: clip.crop_h,
+    };
+
+    function onMove(ev) {
+        const dx = (ev.clientX - startMouse.x) / rect.width;
+        const dy = (ev.clientY - startMouse.y) / rect.height;
+
+        let nx = startCrop.x, ny = startCrop.y;
+        let nw = startCrop.w, nh = startCrop.h;
+
+        if (mode === 'move') {
+            nx = startCrop.x + dx;
+            ny = startCrop.y + dy;
+        } else {
+            // Resize handles
+            if (mode.includes('w')) { nx = startCrop.x + dx; nw = startCrop.w - dx; }
+            if (mode.includes('e')) { nw = startCrop.w + dx; }
+            if (mode.includes('n')) { ny = startCrop.y + dy; nh = startCrop.h - dy; }
+            if (mode.includes('s')) { nh = startCrop.h + dy; }
+        }
+
+        // Clamp: mínimo 5%, mantém dentro dos limites
+        nw = Math.max(0.05, nw);
+        nh = Math.max(0.05, nh);
+        nx = Math.max(0, Math.min(nx, 1 - nw));
+        ny = Math.max(0, Math.min(ny, 1 - nh));
+        if (nx + nw > 1) nw = 1 - nx;
+        if (ny + nh > 1) nh = 1 - ny;
+
+        clip.crop_x = nx;
+        clip.crop_y = ny;
+        clip.crop_w = nw;
+        clip.crop_h = nh;
+
+        updateCropOverlay(clipId);
+    }
+
+    function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        updateUI();
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+}
+
+function setCropPreset(clipId, preset) {
+    const clip = clips.find(c => c.clip_id === clipId);
+    if (!clip) return;
+
+    if (preset === 'full') {
+        clip.crop_x = 0; clip.crop_y = 0;
+        clip.crop_w = 1; clip.crop_h = 1;
+    } else if (preset === 'center-50') {
+        clip.crop_x = 0.25; clip.crop_y = 0.25;
+        clip.crop_w = 0.5; clip.crop_h = 0.5;
+    } else if (preset === 'ar-profile') {
+        const prof = getCurrentProfile();
+        const [arW, arH] = (prof.aspect_ratio || '1:1').split(':').map(Number);
+        const targetRatio = arW / arH;
+        const clipRatio = clip.width / clip.height;
+        const currentRatio = clipRatio; // original frame ratio
+
+        if (targetRatio > currentRatio) {
+            // Target wider: full width, crop height
+            const cropH = currentRatio / targetRatio;
+            clip.crop_x = 0;
+            clip.crop_w = 1;
+            clip.crop_h = cropH;
+            clip.crop_y = (1 - cropH) / 2;
+        } else {
+            // Target taller: full height, crop width
+            const cropW = targetRatio / currentRatio;
+            clip.crop_y = 0;
+            clip.crop_h = 1;
+            clip.crop_w = cropW;
+            clip.crop_x = (1 - cropW) / 2;
+        }
+    }
+
+    updateCropOverlay(clipId);
+    updateUI();
+}
+
 
 // === Actions ===
 async function removeClip(clipId, storedName) {
@@ -709,13 +854,18 @@ async function renderVideo() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                clips: active.map(c => ({
-                    stored_name: c.stored_name,
-                    trim_start: c.trim_start,
-                    trim_end: c.trim_end,
-                    fit_mode: c.fit_mode !== 'default' ? c.fit_mode : undefined,
-                    crop_anchor: c.crop_anchor !== 'center' ? c.crop_anchor : undefined,
-                })),
+                clips: active.map(c => {
+                    const hasCrop = c.crop_x > 0.01 || c.crop_y > 0.01 || c.crop_w < 0.99 || c.crop_h < 0.99;
+                    return {
+                        stored_name: c.stored_name,
+                        trim_start: c.trim_start,
+                        trim_end: c.trim_end,
+                        crop: hasCrop ? {
+                            x: c.crop_x, y: c.crop_y,
+                            w: c.crop_w, h: c.crop_h,
+                        } : undefined,
+                    };
+                }),
                 profile: currentProfileSlug,
                 webhook_url: webhookUrl || undefined,
                 subtitles: getSubtitlesConfig(),
