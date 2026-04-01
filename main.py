@@ -803,12 +803,14 @@ async def render_video(session_id: str, payload: dict):
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         for c in raw_clips:
             try:
                 c.close()
             except Exception:
                 pass
-        raise HTTPException(500, f"Erro na renderização: {e}")
+        raise HTTPException(500, f"Erro na renderização: {type(e).__name__}: {e}")
 
 
 @app.get("/api/sessions/{session_id}/download/{filename}")
