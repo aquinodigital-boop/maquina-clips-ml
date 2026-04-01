@@ -136,6 +136,100 @@
             <div class="preview-timeline" id="previewTimeline"></div>
         </div>
 
+        <!-- Subtitles Section -->
+        <div class="subtitles-section" id="subtitlesSection" style="display: none;">
+            <div class="section-header">
+                <h2>Legendas Dinamicas</h2>
+                <div class="sub-toggle">
+                    <label>
+                        <input type="checkbox" id="subtitlesEnabled" onchange="toggleSubtitles()">
+                        Ativar legendas
+                    </label>
+                </div>
+            </div>
+
+            <div id="subtitlesPanel" style="display: none;">
+                <!-- Transcribe button -->
+                <div class="sub-transcribe" id="subTranscribeArea">
+                    <p class="sub-hint">Transcreva os clipes automaticamente com IA (Whisper)</p>
+                    <div class="sub-transcribe-row">
+                        <select id="subLanguage">
+                            <option value="pt">Portugues</option>
+                            <option value="en">Ingles</option>
+                            <option value="es">Espanhol</option>
+                        </select>
+                        <button class="sub-transcribe-btn" onclick="transcribeClips()">
+                            Transcrever Automaticamente
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Transcription progress -->
+                <div class="sub-progress" id="subProgress" style="display: none;">
+                    <div class="upload-spinner"></div>
+                    <span>Transcrevendo com IA... isso pode levar alguns segundos</span>
+                </div>
+
+                <!-- Style options -->
+                <div class="sub-style-section" id="subStyleSection" style="display: none;">
+                    <h3>Estilo da Legenda</h3>
+                    <div class="sub-style-grid">
+                        <div class="sub-style-card selected" data-style="word_by_word" onclick="selectSubStyle('word_by_word')">
+                            <div class="sub-style-preview">PALAVRA</div>
+                            <div class="sub-style-name">Palavra por palavra</div>
+                            <div class="sub-style-desc">Uma palavra por vez, grande e centralizada</div>
+                        </div>
+                        <div class="sub-style-card" data-style="highlight" onclick="selectSubStyle('highlight')">
+                            <div class="sub-style-preview">frase <span class="hl">destaque</span></div>
+                            <div class="sub-style-name">Frase com destaque</div>
+                            <div class="sub-style-desc">Frase inteira, palavra atual destacada</div>
+                        </div>
+                        <div class="sub-style-card" data-style="classic" onclick="selectSubStyle('classic')">
+                            <div class="sub-style-preview">Legenda classica</div>
+                            <div class="sub-style-name">Classica</div>
+                            <div class="sub-style-desc">Texto na parte inferior, estilo tradicional</div>
+                        </div>
+                    </div>
+
+                    <div class="sub-options">
+                        <div class="field">
+                            <label>Cor do texto</label>
+                            <input type="color" id="subColor" value="#FFFFFF">
+                        </div>
+                        <div class="field">
+                            <label>Cor do destaque</label>
+                            <input type="color" id="subHighlightColor" value="#FF6B35">
+                        </div>
+                        <div class="field">
+                            <label>Posicao</label>
+                            <select id="subPosition">
+                                <option value="bottom">Inferior</option>
+                                <option value="center">Centro</option>
+                                <option value="top">Superior</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label>Fundo escuro</label>
+                            <select id="subBg">
+                                <option value="">Sem fundo</option>
+                                <option value="#000000" selected>Preto</option>
+                                <option value="#1A1A1A">Cinza escuro</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Editable word list -->
+                <div class="sub-words-section" id="subWordsSection" style="display: none;">
+                    <h3>Texto Transcrito <span class="sub-word-count" id="subWordCount"></span></h3>
+                    <div class="sub-words-editor">
+                        <textarea id="subWordsText" rows="4" placeholder="Texto transcrito aparecera aqui..."></textarea>
+                        <p class="sub-words-hint">Edite o texto livremente. As palavras serao re-sincronizadas com os tempos originais.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Webhook Toggle -->
         <div class="webhook-section" id="webhookSection" style="display: none;">
             <div class="webhook-toggle">

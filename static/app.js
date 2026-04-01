@@ -3,6 +3,8 @@ let sessionId = null;
 let clips = [];
 let profiles = {};
 let currentProfileSlug = '';
+let transcribedWords = []; // { word, start, end }
+let subtitleStyle = 'word_by_word';
 
 // === Elementos ===
 const dropZone = document.getElementById('dropZone');
@@ -308,6 +310,7 @@ function updateUI() {
     renderBtn.style.display = hasClips ? '' : 'none';
     previewSection.style.display = hasClips ? '' : 'none';
     webhookSection.style.display = hasClips ? '' : 'none';
+    document.getElementById('subtitlesSection').style.display = hasClips ? '' : 'none';
 
     const prof = getCurrentProfile();
 
@@ -520,6 +523,113 @@ async function removeClip(clipId, storedName) {
     if (storedName) fetch(`/api/sessions/${sessionId}/clips/${storedName}`, { method: 'DELETE' });
 }
 
+// === Subtitles ===
+function toggleSubtitles() {
+    const enabled = document.getElementById('subtitlesEnabled').checked;
+    document.getElementById('subtitlesPanel').style.display = enabled ? '' : 'none';
+}
+
+async function transcribeClips() {
+    const active = clips.filter(c => !c.uploading);
+    if (active.length === 0) return;
+
+    const btn = document.querySelector('.sub-transcribe-btn');
+    btn.disabled = true;
+    document.getElementById('subProgress').style.display = 'flex';
+    document.getElementById('subTranscribeArea').style.display = 'none';
+
+    const language = document.getElementById('subLanguage').value;
+
+    try {
+        const res = await fetch(`/api/sessions/${sessionId}/transcribe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                clips: active.map(c => ({
+                    stored_name: c.stored_name,
+                    trim_start: c.trim_start,
+                    trim_end: c.trim_end,
+                    duration: c.trim_end - c.trim_start,
+                })),
+                language,
+            }),
+        });
+
+        if (!res.ok) throw new Error((await res.json()).detail || 'Erro na transcrição');
+
+        const data = await res.json();
+        transcribedWords = data.words;
+
+        // Show results
+        document.getElementById('subProgress').style.display = 'none';
+        document.getElementById('subStyleSection').style.display = '';
+        document.getElementById('subWordsSection').style.display = '';
+        document.getElementById('subTranscribeArea').style.display = '';
+
+        const text = transcribedWords.map(w => w.word).join(' ');
+        document.getElementById('subWordsText').value = text;
+        document.getElementById('subWordCount').textContent = `(${transcribedWords.length} palavras)`;
+
+    } catch (err) {
+        alert(`Erro na transcrição: ${err.message}`);
+        document.getElementById('subProgress').style.display = 'none';
+        document.getElementById('subTranscribeArea').style.display = '';
+    }
+
+    btn.disabled = false;
+}
+
+function selectSubStyle(style) {
+    subtitleStyle = style;
+    document.querySelectorAll('.sub-style-card').forEach(card => {
+        card.classList.toggle('selected', card.dataset.style === style);
+    });
+}
+
+function getSubtitlesConfig() {
+    if (!document.getElementById('subtitlesEnabled').checked) return null;
+    if (transcribedWords.length === 0) return null;
+
+    // Re-sync words if text was edited
+    const editedText = document.getElementById('subWordsText').value.trim();
+    const editedWords = editedText.split(/\s+/).filter(Boolean);
+    let words;
+
+    if (editedWords.length === transcribedWords.length) {
+        // Same count — just replace the text, keep timestamps
+        words = transcribedWords.map((w, i) => ({
+            word: editedWords[i],
+            start: w.start,
+            end: w.end,
+        }));
+    } else {
+        // Different count — redistribute timestamps evenly
+        const totalStart = transcribedWords[0].start;
+        const totalEnd = transcribedWords[transcribedWords.length - 1].end;
+        const totalDur = totalEnd - totalStart;
+        const wordDur = totalDur / editedWords.length;
+        words = editedWords.map((word, i) => ({
+            word,
+            start: round3(totalStart + i * wordDur),
+            end: round3(totalStart + (i + 1) * wordDur),
+        }));
+    }
+
+    return {
+        enabled: true,
+        words,
+        style: {
+            subtitle_style: subtitleStyle,
+            color: document.getElementById('subColor').value,
+            highlight_color: document.getElementById('subHighlightColor').value,
+            position: document.getElementById('subPosition').value,
+            bg_color: document.getElementById('subBg').value || null,
+        },
+    };
+}
+
+function round3(n) { return Math.round(n * 1000) / 1000; }
+
 // === Webhook ===
 function toggleWebhookUrl() {
     const enabled = document.getElementById('webhookEnabled').checked;
@@ -555,6 +665,7 @@ async function renderVideo() {
                 })),
                 profile: currentProfileSlug,
                 webhook_url: webhookUrl || undefined,
+                subtitles: getSubtitlesConfig(),
             }),
         });
 

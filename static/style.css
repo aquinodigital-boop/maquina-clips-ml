@@ -466,6 +466,201 @@ body {
     min-width: 30px;
 }
 
+/* === Subtitles === */
+.subtitles-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.2rem;
+    margin-bottom: 1.5rem;
+}
+
+.subtitles-section .section-header {
+    margin-bottom: 0.8rem;
+}
+
+.sub-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-dim);
+}
+
+.sub-toggle input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 16px; height: 16px;
+}
+
+.sub-transcribe {
+    margin-bottom: 1rem;
+}
+
+.sub-hint {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-bottom: 0.6rem;
+}
+
+.sub-transcribe-row {
+    display: flex;
+    gap: 0.6rem;
+}
+
+.sub-transcribe-row select {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem 0.8rem;
+    font-size: 0.9rem;
+    outline: none;
+}
+
+.sub-transcribe-btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 0.5rem 1.2rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: opacity 0.15s;
+}
+
+.sub-transcribe-btn:hover { opacity: 0.85; }
+.sub-transcribe-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.sub-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 1rem;
+    color: var(--text-dim);
+    font-size: 0.9rem;
+}
+
+/* Style cards */
+.sub-style-section {
+    margin-top: 1rem;
+}
+
+.sub-style-section h3 {
+    font-size: 0.95rem;
+    margin-bottom: 0.6rem;
+}
+
+.sub-style-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+}
+
+.sub-style-card {
+    background: var(--bg);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+}
+
+.sub-style-card:hover {
+    border-color: var(--text-dim);
+}
+
+.sub-style-card.selected {
+    border-color: var(--accent);
+    background: rgba(255, 107, 53, 0.08);
+}
+
+.sub-style-preview {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+    min-height: 1.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+}
+
+.sub-style-preview .hl {
+    color: var(--accent);
+}
+
+.sub-style-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+}
+
+.sub-style-desc {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+}
+
+.sub-options {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.8rem;
+    margin-bottom: 1rem;
+}
+
+.sub-options input[type="color"] {
+    width: 100%;
+    height: 36px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    cursor: pointer;
+    padding: 2px;
+}
+
+/* Word editor */
+.sub-words-section {
+    margin-top: 1rem;
+}
+
+.sub-words-section h3 {
+    font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+}
+
+.sub-word-count {
+    color: var(--text-dim);
+    font-weight: 400;
+    font-size: 0.8rem;
+}
+
+.sub-words-editor textarea {
+    width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.8rem;
+    font-size: 0.9rem;
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+    line-height: 1.6;
+}
+
+.sub-words-editor textarea:focus {
+    border-color: var(--accent);
+}
+
+.sub-words-hint {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-top: 0.4rem;
+}
+
 /* === Webhook === */
 .webhook-section {
     background: var(--bg-card);
