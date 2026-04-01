@@ -417,10 +417,8 @@ def burn_subtitles_into_clip(final_clip, sub_data):
     # Cache de frames de legenda
     frame_cache = {}
 
-    original_make_frame = final_clip.make_frame
-
-    def make_frame_with_subs(t):
-        base_frame = original_make_frame(t)
+    def process_frame(get_frame, t):
+        base_frame = get_frame(t)
 
         # Encontra o segmento ativo
         active_seg = None
@@ -441,17 +439,15 @@ def burn_subtitles_into_clip(final_clip, sub_data):
 
         sub_frame = frame_cache[cache_key]
 
-        # Combina: usa o canal alpha da legenda para sobrepor
+        # Alpha compositing
         alpha = sub_frame[:, :, 3:4].astype(np.float32) / 255.0
         rgb = sub_frame[:, :, :3].astype(np.float32)
         base = base_frame.astype(np.float32)
 
-        # Blend
         result = base * (1 - alpha) + rgb * alpha
         return result.astype(np.uint8)
 
-    new_clip = final_clip.with_make_frame(make_frame_with_subs)
-    return new_clip
+    return final_clip.transform(process_frame)
 
 
 # ==================== RENDER ====================
